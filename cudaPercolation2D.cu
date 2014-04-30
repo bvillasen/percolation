@@ -5,7 +5,8 @@
 
 texture<unsigned char, cudaTextureType2D, cudaReadModeElementType> tex_isFree;
 texture<int, cudaTextureType2D, cudaReadModeElementType> tex_nNeighb;
-texture<float, cudaTextureType2D, cudaReadModeElementType> tex_concentration;
+texture<float, cudaTextureType2D, cudaReadModeElementType> tex_concentrationIn;
+// surface< void, cudaSurfaceType2D> surf_concentrationOut;
 
 __global__ void countFreeNeighbors_kernel( const int nWidth, const int nHeight, int *nFreeAll){
   int t_j = blockIdx.x*blockDim.x + threadIdx.x;
@@ -59,15 +60,15 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, unsigned c
   if (t_j == (nWidth-1)) right_nNeighb = tex2D( tex_nNeighb, 0, t_i );
 
   //Read my neighbors concentration
-  float left_C  = tex2D( tex_concentration, t_j-1, t_i );
-  float right_C = tex2D( tex_concentration, t_j+1, t_i );
-  float up_C    = tex2D( tex_concentration, t_j, t_i+1 );
-  float down_C  = tex2D( tex_concentration, t_j, t_i-1 );
+  float left_C  = tex2D( tex_concentrationIn, t_j-1, t_i );
+  float right_C = tex2D( tex_concentrationIn, t_j+1, t_i );
+  float up_C    = tex2D( tex_concentrationIn, t_j, t_i+1 );
+  float down_C  = tex2D( tex_concentrationIn, t_j, t_i-1 );
   //Set PERIODIC boundary conditions
-  if (t_i == 0)           down_C = tex2D( tex_concentration, t_j, nHeight-1 );
-  if (t_i == (nHeight-1))   up_C = tex2D( tex_concentration, t_j, 0 );
-  if (t_j == 0)           left_C = tex2D( tex_concentration, nWidth-1, t_i );
-  if (t_j == (nWidth-1)) right_C = tex2D( tex_concentration, 0, t_i );
+  if (t_i == 0)           down_C = tex2D( tex_concentrationIn, t_j, nHeight-1 );
+  if (t_i == (nHeight-1))   up_C = tex2D( tex_concentrationIn, t_j, 0 );
+  if (t_j == 0)           left_C = tex2D( tex_concentrationIn, nWidth-1, t_i );
+  if (t_j == (nWidth-1)) right_C = tex2D( tex_concentrationIn, 0, t_i );
  
   if ( isFree ) 
     concentrationOut[tid] = left_C/left_nNeighb + right_C/right_nNeighb + down_C/down_nNeighb + up_C/up_nNeighb;
@@ -76,15 +77,15 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, unsigned c
 /////////////////////////////////////////////////////////////////////////////////////// 
 __global__ void main_kernel_shared( const int nWidth, const int nHeight, unsigned char *isFreeAll,
 			          cudaP *concentrationIn, cudaP *concentrationOut, int *nNeighb  ){
-  int t_j = blockIdx.x*blockDim.x + threadIdx.x;
-  int t_i = blockIdx.y*blockDim.y + threadIdx.y;
-  int tid = t_j + t_i*blockDim.x*gridDim.x;
+  const int t_j = blockIdx.x*blockDim.x + threadIdx.x;
+  const int t_i = blockIdx.y*blockDim.y + threadIdx.y;
+  const int tid = t_j + t_i*blockDim.x*gridDim.x;
   
   //Read how many free neighbors my neighbors have 
   int left_nNeighb   = tex2D( tex_nNeighb, t_j-1, t_i );
   int right_nNeighb  = tex2D( tex_nNeighb, t_j+1, t_i );
   int up_nNeighb     = tex2D( tex_nNeighb, t_j, t_i+1 );
-  int down_nNeighb    = tex2D( tex_nNeighb, t_j, t_i-1 );
+  int down_nNeighb   = tex2D( tex_nNeighb, t_j, t_i-1 );
 
   //Read my neighbors concentration
   __shared__ cudaP concIn_sh[ %(B_WIDTH)s + 2 ][ %(B_HEIGHT)s + 2 ];
