@@ -52,7 +52,7 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, unsigned c
   int left_nNeighb   = tex2D( tex_nNeighb, t_j-1, t_i );
   int right_nNeighb  = tex2D( tex_nNeighb, t_j+1, t_i );
   int up_nNeighb     = tex2D( tex_nNeighb, t_j, t_i+1 );
-  int down_nNeighb    = tex2D( tex_nNeighb, t_j, t_i-1 );
+  int down_nNeighb   = tex2D( tex_nNeighb, t_j, t_i-1 );
   //Set PERIODIC boundary conditions
   if (t_i == 0)           down_nNeighb = tex2D( tex_nNeighb, t_j, nHeight-1 );
   if (t_i == (nHeight-1))   up_nNeighb = tex2D( tex_nNeighb, t_j, 0 );

@@ -14,8 +14,9 @@ animation2DDirectory = parentDirectory + "/animation2D"
 sys.path.extend( [toolsDirectory, animation2DDirectory] )
 import animation2D
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
+from dataAnalysis import plotData
 
-nPoints = 512
+nPoints = 1024
 probability = .4
 
 cudaP = "float"
@@ -40,12 +41,13 @@ cudaPre = precision[cudaP]
 nWidth = nPoints
 nHeight = nPoints 
 
-nCenter = 64
+nCenter = 2	  #Has to be even
 offsetX = 0
 offsetY = 0
 
 nIterationsPerPlot = 400
 maxVals = []
+sumConc = []
 
 #Initialize openGL
 if usingAnimation:
@@ -82,7 +84,6 @@ if showKernelMemInfo:
   print ""
   kernelMemoryInfo(mainKernel_sh, 'mainKernel_shared')
   print ""
-  #sys.exit()
 ########################################################################
 from pycuda.elementwise import ElementwiseKernel
 ########################################################################
@@ -116,13 +117,14 @@ animIter = 0
 def stepFunction():
   global animIter
   cuda.memcpy_dtod( plotData_d.ptr, concentrationOut_d.ptr, concentrationOut_d.nbytes )
-  maxVals.append(gpuarray.max( plotData_d ).get())
-  multiplyByScalarReal(1./maxVals[-1], plotData_d)
+  maxVal = gpuarray.max( plotData_d ).get()
+  multiplyByScalarReal(1./maxVal, plotData_d)
   if cudaP == "float": [ oneIteration_tex() for i in range(nIterationsPerPlot) ]
   else: [ oneIteration_sh() for i in range(nIterationsPerPlot//2) ]
-  if plotting: 
-    plt.plot(maxVals, "b")
-    plt.draw()
+  if plotting and animIter%25 == 0: 
+    maxVals.append( maxVal )
+    sumConc.append( gpuarray.sum(concentrationIn_d).get() )
+    plotData( maxVals, sumConc )
   animIter += 1
 ###########################################################################
 ###########################################################################
@@ -133,11 +135,17 @@ np.random.seed(int(time.time()))  #Change numpy random seed
 initialFreeMemory = getFreeMemory( show=True )
 randomVals_h = np.random.random([nHeight, nWidth])
 isFree_h = ( randomVals_h > probability )
-isFree_h[offsetY+nHeight/2-nCenter/2:offsetY+nHeight/2+nCenter/2,offsetX+nWidth/2-nCenter/2:offsetX+nWidth/2+nCenter/2 ] = True
+concentration_h = np.zeros( [nHeight, nWidth], dtype=cudaPre )
+if nCenter==1:
+  isFree_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1 ] = True
+  concentration_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1] = 1.
+else:
+  isFree_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
+	    offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = True
+  concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
+		   offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
 isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
 nNeighb_d = gpuarray.to_gpu( np.zeros([nHeight, nWidth], dtype=np.int32) )
-concentration_h = np.zeros( [nHeight, nWidth], dtype=cudaPre )
-concentration_h[offsetY+nHeight/2-nCenter/2:offsetY+nHeight/2+nCenter/2,offsetX+nWidth/2-nCenter/2:offsetX+nWidth/2+nCenter/2 ] = 1.
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
 activeBlocks_d = gpuarray.to_gpu( np.zeros( [ grid2D[1],grid2D[0] ], dtype=np.uint8) )
@@ -177,7 +185,7 @@ if showKernelMemInfo:
 ###########################################################################
 ###########################################################################
 #Start Simulation
-if plotting: plt.ion(), plt.show()
+if plotting: plt.ion(), plt.show(), 
 print "Starting simulation"
 if cudaP == "double": print "Using double precision\n"
 else: print "Using single precision\n"
