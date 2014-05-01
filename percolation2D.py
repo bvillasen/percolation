@@ -17,7 +17,7 @@ from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2D
 from dataAnalysis import plotData
 
 nPoints = 1024
-probability = .4
+probability = 0.4
 
 cudaP = "float"
 devN = None
@@ -100,9 +100,10 @@ def countFreeNeighbors():
 nIter = 0
 def oneIteration_tex():
   global nIter
-  #findActivityKernel( cudaPre(1.e-30), concentrationOut_d, activeBlocks_d, grid=grid2D, block=block2D  )
-  mainKernel_tex( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationOut_d, activeBlocks_d,
-	         plotData_d, np.uint8(0), grid=grid2D, block=block2D )
+  tex_isFree.set_array( isFree_dArray )
+  tex_concentrationIn.set_array( concentration1_dArray )
+  mainKernel_tex( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationOut_d, 
+		 grid=grid2D, block=block2D, texrefs=[tex_isFree, tex_concentrationIn] )
   copy2D_concentrationArray1( aligned=True )
   nIter += 1
 def oneIteration_sh():
@@ -144,7 +145,7 @@ else:
 	    offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = True
   concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
 		   offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
-isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
+isFree_d = gpuarray.to_gpu( isFree_h.astype(np.int32) ) 
 nNeighb_d = gpuarray.to_gpu( np.zeros([nHeight, nWidth], dtype=np.int32) )
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
@@ -152,6 +153,7 @@ activeBlocks_d = gpuarray.to_gpu( np.zeros( [ grid2D[1],grid2D[0] ], dtype=np.ui
 activeThreads_d = gpuarray.to_gpu( np.zeros([nHeight, nWidth], dtype=np.uint8) )
 #For texture version
 isFree_dArray, copy2D_isFreeArray   = gpuArray2DtocudaArray( isFree_d )
+tex_isFree.set_array( isFree_dArray )
 nNeighb_dArray, copy2D_nNeigdbArray = gpuArray2DtocudaArray( nNeighb_d )
 if cudaP == "float":
   concentration1_dArray, copy2D_concentrationArray1 = gpuArray2DtocudaArray( concentrationOut_d )
@@ -176,7 +178,7 @@ if usingAnimation:
 ###########################################################################
 ###########################################################################
 if showKernelMemInfo: 
-  countFreeNeighbors()
+  #countFreeNeighbors()
   if cudaP == "float": oneIteration_tex() 
   else: oneIteration_sh()
   print "Precision: ", cudaP
@@ -191,7 +193,7 @@ if cudaP == "double": print "Using double precision\n"
 else: print "Using single precision\n"
 print "p = {0:1.2f}\n".format( probability ) 
 
-countFreeNeighbors()
+#countFreeNeighbors()
 
 #run animation
 if usingAnimation:
