@@ -40,18 +40,16 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, int *isFre
   int t_i = blockIdx.y*blockDim.y + threadIdx.y;
   int tid = t_j + t_i*blockDim.x*gridDim.x;
    
-  int isFree = isFreeAll[tid];
-
   //Read neighbors occupancy
   int left_isFree   = tex2D( tex_isFree, t_j-1, t_i ) ;
   int right_isFree  = tex2D( tex_isFree, t_j+1, t_i ) ;
   int up_isFree     = tex2D( tex_isFree, t_j, t_i+1 ) ;
   int down_isFree   = tex2D( tex_isFree, t_j, t_i-1 ) ;
   //Set PERIODIC boundary conditions
-  if (t_i == 0)           down_isFree = tex2D( tex_isFree, t_j, nHeight-1 );
-  if (t_i == (nHeight-1))   up_isFree = tex2D( tex_isFree, t_j, 0 );
-  if (t_j == 0)           left_isFree = tex2D( tex_isFree, nWidth-1, t_i );
-  if (t_j == (nWidth-1)) right_isFree = tex2D( tex_isFree, 0, t_i );
+  if (t_i == 0)           down_isFree = isFreeAll[ t_j + (nHeight-1)*nWidth ];
+  if (t_i == (nHeight-1))   up_isFree = isFreeAll[ t_j ];
+  if (t_j == 0)           left_isFree = isFreeAll[ (nWidth-1) + (t_i)*nWidth ];
+  if (t_j == (nWidth-1)) right_isFree = isFreeAll[ (t_i)*nWidth ];
 
   //Read neighbors concentration
   float center_C = tex2D( tex_concentrationIn, t_j,   t_i );
@@ -67,105 +65,100 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, int *isFre
  
   float newConcentration = 0.25f*( left_C + right_C + down_C + up_C ) +
          0.25f*( 4 - ( left_isFree + right_isFree + down_isFree + up_isFree ) )*center_C;
-//   float newConcentration = left_isFree + right_isFree + down_isFree + up_isFree ;
-  
-  
-  if ( isFree ) concentrationOut[tid] = newConcentration;
+	 
+  if ( isFreeAll[tid] ) concentrationOut[tid] = newConcentration;
 //     concentrationOut[tid] = left_C/left_nNeighb + right_C/right_nNeighb + down_C/down_nNeighb + up_C/up_nNeighb;
 }
 /////////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////// 
-__global__ void main_kernel_shared( const int nWidth, const int nHeight, unsigned char *isFreeAll,
-			          cudaP *concentrationIn, cudaP *concentrationOut, int *nNeighb  ){
+__global__ void main_kernel_shared( const int nWidth, const int nHeight, int *isFreeAll,
+			          cudaP *concentrationIn, cudaP *concentrationOut ){
   const int t_j = blockIdx.x*blockDim.x + threadIdx.x;
   const int t_i = blockIdx.y*blockDim.y + threadIdx.y;
   const int tid = t_j + t_i*blockDim.x*gridDim.x;
   
-  //Read how many free neighbors my neighbors have 
-  int left_nNeighb   = tex2D( tex_nNeighb, t_j-1, t_i );
-  int right_nNeighb  = tex2D( tex_nNeighb, t_j+1, t_i );
-  int up_nNeighb     = tex2D( tex_nNeighb, t_j, t_i+1 );
-  int down_nNeighb   = tex2D( tex_nNeighb, t_j, t_i-1 );
+  //Read neighbors occupancy
+  int left_isFree   = tex2D( tex_isFree, t_j-1, t_i ) ;
+  int right_isFree  = tex2D( tex_isFree, t_j+1, t_i ) ;
+  int up_isFree     = tex2D( tex_isFree, t_j, t_i+1 ) ;
+  int down_isFree   = tex2D( tex_isFree, t_j, t_i-1 ) ;
+  //Set PERIODIC boundary conditions
+  if (t_i == 0)           down_isFree = isFreeAll[ t_j + (nHeight-1)*nWidth ];
+  if (t_i == (nHeight-1))   up_isFree = isFreeAll[ t_j ];
+  if (t_j == 0)           left_isFree = isFreeAll[ (nWidth-1) + (t_i)*nWidth ];
+  if (t_j == (nWidth-1)) right_isFree = isFreeAll[ (t_i)*nWidth ];
 
   //Read my neighbors concentration
   __shared__ cudaP concIn_sh[ %(B_WIDTH)s + 2 ][ %(B_HEIGHT)s + 2 ];
   concIn_sh[threadIdx.x+1][threadIdx.y+1] = concentrationIn[tid] ;
   //Left boundary
-  if (t_j == 0){
-    concIn_sh[0][threadIdx.y+1] = concentrationIn[ (nWidth-1) + t_i*nWidth ];
-    left_nNeighb = nNeighb[ (nWidth-1) + t_i*nWidth ]; }
+  if (t_j == 0) concIn_sh[0][threadIdx.y+1] = concentrationIn[ (nWidth-1) + t_i*nWidth ];
   else if ( threadIdx.x == 0 ) concIn_sh[0][threadIdx.y+1] = concentrationIn[ (t_j-1) + t_i*nWidth ];
   //Right boundary
-  if (t_j == nWidth-1){
-    concIn_sh[blockDim.x+1][threadIdx.y+1] = concentrationIn[ t_i*nWidth ];
-    right_nNeighb = nNeighb[ t_i*nWidth ]; }
+  if (t_j == nWidth-1) concIn_sh[blockDim.x+1][threadIdx.y+1] = concentrationIn[ t_i*nWidth ];
   else if ( threadIdx.x == blockDim.x-1 ) concIn_sh[blockDim.x+1][threadIdx.y+1] = concentrationIn[ (t_j+1) + t_i*nWidth ];
   //Down boundary
-  if (t_i == 0){
-    concIn_sh[threadIdx.x+1][0] = concentrationIn[ t_j + (nHeight-1)*nWidth ];
-    down_nNeighb = nNeighb[ t_j + (nHeight-1)*nWidth ]; }
+  if (t_i == 0) concIn_sh[threadIdx.x+1][0] = concentrationIn[ t_j + (nHeight-1)*nWidth ];
   else if ( threadIdx.y == 0 ) concIn_sh[threadIdx.x+1][0] = concentrationIn[ t_j + (t_i-1)*nWidth ];
   //Up boundary
-  if (t_i == nHeight-1){
-    concIn_sh[threadIdx.x+1][blockDim.y+1] = concentrationIn[ t_j ];
-    up_nNeighb = nNeighb[ t_j ]; }
+  if (t_i == nHeight-1) concIn_sh[threadIdx.x+1][blockDim.y+1] = concentrationIn[ t_j ];
   else if ( threadIdx.y == blockDim.y-1 ) concIn_sh[threadIdx.x+1][blockDim.y+1] = concentrationIn[ t_j + (t_i+1)*nWidth ];
   __syncthreads();
   
-  if ( isFreeAll[tid] ) 
-    concentrationOut[tid] = concIn_sh[threadIdx.x][threadIdx.y+1]/left_nNeighb + 
-			    concIn_sh[threadIdx.x+2][threadIdx.y+1]/right_nNeighb + 
-			    concIn_sh[threadIdx.x+1][threadIdx.y]/down_nNeighb + 
-			    concIn_sh[threadIdx.x+1][threadIdx.y+2]/up_nNeighb;
+  float newConc = 0.25*( concIn_sh[threadIdx.x][threadIdx.y+1] + concIn_sh[threadIdx.x+2][threadIdx.y+1] +
+                          concIn_sh[threadIdx.x+1][threadIdx.y] + concIn_sh[threadIdx.x+1][threadIdx.y+2] ) +
+         0.25*( 4 - ( left_isFree + right_isFree + down_isFree + up_isFree ) )*concIn_sh[threadIdx.x+1][threadIdx.y+1];
+  
+  if ( isFreeAll[tid] ) concentrationOut[tid] = newConc;
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-__global__ void findActivity_kernel( cudaP minVal, cudaP *concentration, unsigned char *activeBlocks ){
-  int t_j = blockIdx.x*blockDim.x + threadIdx.x;
-  int t_i = blockIdx.y*blockDim.y + threadIdx.y;
-  int tid = t_j + t_i*blockDim.x*gridDim.x;
-  int tid_b = threadIdx.x + threadIdx.y*blockDim.x;
-
-  __shared__ cudaP concentration_sh[ %(THREADS_PER_BLOCK)s ];
-  concentration_sh[tid_b] = concentration[tid];
-  __syncthreads();
-  
-  int i = blockDim.x*blockDim.y / 2;
-  while ( i > 0 ){
-    if ( tid_b < i ) concentration_sh[tid_b] = concentration_sh[tid_b] + concentration_sh[tid_b+i];
-    __syncthreads();
-    i /= 2;
-  }
-  if ( tid_b == 0 ){
-    if (concentration_sh[0] >= minVal ) {
-      activeBlocks[ blockIdx.x + blockIdx.y*gridDim.x ] = (unsigned char) 1;
-      //right 
-      if (blockIdx.x < gridDim.x-1) activeBlocks[ (blockIdx.x+1) + blockIdx.y*gridDim.x ] = (unsigned char) 1;
-      //left
-      if (blockIdx.x > 0) activeBlocks[ (blockIdx.x-1) + blockIdx.y*gridDim.x ] = (unsigned char) 1;
-      //up 
-      if (blockIdx.y < gridDim.y-1) activeBlocks[ blockIdx.x + (blockIdx.y+1)*gridDim.x  ] = (unsigned char) 1;
-      //Down 
-      if (blockIdx.y > 0) activeBlocks[ blockIdx.x + (blockIdx.y-1)*gridDim.x  ] = (unsigned char) 1;
-    }
-  }
-}
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-__global__ void getActivity_kernel(  unsigned char *activeBlocks, unsigned char *activeThreads ){
-  int t_j = blockIdx.x*blockDim.x + threadIdx.x;
-  int t_i = blockIdx.y*blockDim.y + threadIdx.y;
-  int tid = t_j + t_i*blockDim.x*gridDim.x ;
-  int tid_b = threadIdx.x + threadIdx.y*blockDim.x;
-  int bid = blockIdx.x + blockIdx.y*gridDim.x;
-  
-  __shared__ unsigned char activeBlock;
-  if (tid_b == 0 ) activeBlock = activeBlocks[bid];
-  __syncthreads();
-  
-  if ( activeBlock ) activeThreads[tid] = (unsigned char) 1;
-  else activeThreads[tid] = (unsigned char) 0;
-}
+// __global__ void findActivity_kernel( cudaP minVal, cudaP *concentration, unsigned char *activeBlocks ){
+//   int t_j = blockIdx.x*blockDim.x + threadIdx.x;
+//   int t_i = blockIdx.y*blockDim.y + threadIdx.y;
+//   int tid = t_j + t_i*blockDim.x*gridDim.x;
+//   int tid_b = threadIdx.x + threadIdx.y*blockDim.x;
+// 
+//   __shared__ cudaP concentration_sh[ %(THREADS_PER_BLOCK)s ];
+//   concentration_sh[tid_b] = concentration[tid];
+//   __syncthreads();
+//   
+//   int i = blockDim.x*blockDim.y / 2;
+//   while ( i > 0 ){
+//     if ( tid_b < i ) concentration_sh[tid_b] = concentration_sh[tid_b] + concentration_sh[tid_b+i];
+//     __syncthreads();
+//     i /= 2;
+//   }
+//   if ( tid_b == 0 ){
+//     if (concentration_sh[0] >= minVal ) {
+//       activeBlocks[ blockIdx.x + blockIdx.y*gridDim.x ] = (unsigned char) 1;
+//       //right 
+//       if (blockIdx.x < gridDim.x-1) activeBlocks[ (blockIdx.x+1) + blockIdx.y*gridDim.x ] = (unsigned char) 1;
+//       //left
+//       if (blockIdx.x > 0) activeBlocks[ (blockIdx.x-1) + blockIdx.y*gridDim.x ] = (unsigned char) 1;
+//       //up 
+//       if (blockIdx.y < gridDim.y-1) activeBlocks[ blockIdx.x + (blockIdx.y+1)*gridDim.x  ] = (unsigned char) 1;
+//       //Down 
+//       if (blockIdx.y > 0) activeBlocks[ blockIdx.x + (blockIdx.y-1)*gridDim.x  ] = (unsigned char) 1;
+//     }
+//   }
+// }
+// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// __global__ void getActivity_kernel(  unsigned char *activeBlocks, unsigned char *activeThreads ){
+//   int t_j = blockIdx.x*blockDim.x + threadIdx.x;
+//   int t_i = blockIdx.y*blockDim.y + threadIdx.y;
+//   int tid = t_j + t_i*blockDim.x*gridDim.x ;
+//   int tid_b = threadIdx.x + threadIdx.y*blockDim.x;
+//   int bid = blockIdx.x + blockIdx.y*gridDim.x;
+//   
+//   __shared__ unsigned char activeBlock;
+//   if (tid_b == 0 ) activeBlock = activeBlocks[bid];
+//   __syncthreads();
+//   
+//   if ( activeBlock ) activeThreads[tid] = (unsigned char) 1;
+//   else activeThreads[tid] = (unsigned char) 0;
+// }
 
 /*
 __global__ void main_kernel( const int nWidth, const int nHeight, int *nFreeAll, unsigned char *isFree, cudaP *concentrationIn, cudaP *concentrationOut ){

@@ -16,8 +16,8 @@ import animation2D
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
 from dataAnalysis import plotData
 
-nPoints = 1024
-probability = 0.4
+nPoints = 512
+probability = 0.36
 
 cudaP = "float"
 devN = None
@@ -41,7 +41,7 @@ cudaPre = precision[cudaP]
 nWidth = nPoints
 nHeight = nPoints 
 
-nCenter = 2	  #Has to be even
+nCenter = 1
 offsetX = 0
 offsetY = 0
 
@@ -73,12 +73,11 @@ cudaCode = SourceModule(cudaCodeString)
 countFreeNeighborsKernel = cudaCode.get_function("countFreeNeighbors_kernel")
 mainKernel_tex = cudaCode.get_function("main_kernel_tex" )
 mainKernel_sh = cudaCode.get_function("main_kernel_shared" )
-findActivityKernel = cudaCode.get_function( "findActivity_kernel" )
-getActivityKernel = cudaCode.get_function( "getActivity_kernel" )
+#findActivityKernel = cudaCode.get_function( "findActivity_kernel" )
+#getActivityKernel = cudaCode.get_function( "getActivity_kernel" )
 tex_isFree = cudaCode.get_texref('tex_isFree')
 tex_nNeighb = cudaCode.get_texref('tex_nNeighb')
 tex_concentrationIn = cudaCode.get_texref('tex_concentrationIn')
-#surf_concentrationOut = cudaCode.get_surfref('surf_concentrationOut')
 if showKernelMemInfo: 
   kernelMemoryInfo(mainKernel_tex, 'mainKernel_tex')
   print ""
@@ -100,16 +99,16 @@ def countFreeNeighbors():
 nIter = 0
 def oneIteration_tex():
   global nIter
-  tex_isFree.set_array( isFree_dArray )
-  tex_concentrationIn.set_array( concentration1_dArray )
   mainKernel_tex( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationOut_d, 
 		 grid=grid2D, block=block2D, texrefs=[tex_isFree, tex_concentrationIn] )
   copy2D_concentrationArray1( aligned=True )
   nIter += 1
 def oneIteration_sh():
   global nIter
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationIn_d, concentrationOut_d, nNeighb_d,  grid=grid2D, block=block2D )
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationOut_d, concentrationIn_d, nNeighb_d,  grid=grid2D, block=block2D )
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationIn_d, concentrationOut_d,
+		grid=grid2D, block=block2D, texrefs=[tex_isFree] )
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationOut_d, concentrationIn_d,
+		grid=grid2D, block=block2D, texrefs=[tex_isFree] )
   #cuda.memcpy_dtod( concentrationIn_d.ptr, concentrationOut_d.ptr, concentrationOut_d.nbytes )
   #concentrationIn_d.gpudata, concentrationOut_d.gpudata = concentrationOut_d.gpudata, concentrationIn_d.gpudata 
   nIter += 1
@@ -158,8 +157,6 @@ nNeighb_dArray, copy2D_nNeigdbArray = gpuArray2DtocudaArray( nNeighb_d )
 if cudaP == "float":
   concentration1_dArray, copy2D_concentrationArray1 = gpuArray2DtocudaArray( concentrationOut_d )
   tex_concentrationIn.set_array( concentration1_dArray )
-  #concentration2_dArray, copy2D_concentrationArray2 = gpuArray2DtocudaArray( concentrationIn_d )
-  #surf_concentrationOut.set_array( concentration2_dArray )
 #For plotting
 plotData_d = gpuarray.to_gpu( np.zeros_like(concentration_h) )
 finalFreeMemory = getFreeMemory( show=False )
@@ -178,7 +175,6 @@ if usingAnimation:
 ###########################################################################
 ###########################################################################
 if showKernelMemInfo: 
-  #countFreeNeighbors()
   if cudaP == "float": oneIteration_tex() 
   else: oneIteration_sh()
   print "Precision: ", cudaP
@@ -193,7 +189,6 @@ if cudaP == "double": print "Using double precision\n"
 else: print "Using single precision\n"
 print "p = {0:1.2f}\n".format( probability ) 
 
-#countFreeNeighbors()
 
 #run animation
 if usingAnimation:
