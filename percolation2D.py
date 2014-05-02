@@ -33,7 +33,7 @@ for option in sys.argv:
   if option.find("mem") >=0: showKernelMemInfo = True
   if option.find("anim") >=0: usingAnimation = True
   if option.find("plot") >=0: plotting = True
-
+  if option.find("p=") >=0: probability = float(option[option.find("=")+1:])
 precision  = {"float":np.float32, "double":np.float64} 
 cudaPre = precision[cudaP]
   
@@ -170,6 +170,7 @@ if usingAnimation:
   if cudaP == "double": animation2D.usingDouble = True
   animation2D.plotData_d = plotData_d
   animation2D.background_h = isFree_h
+  animation2D.backgroundType = "move"
   animation2D.maxVar = cudaPre(1.01)
   animation2D.minVar = cudaPre(0.)
 ###########################################################################
