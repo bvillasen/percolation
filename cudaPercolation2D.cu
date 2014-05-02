@@ -34,7 +34,7 @@ __global__ void countFreeNeighbors_kernel( const int nWidth, const int nHeight, 
 }
 /////////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////// 
-__global__ void main_kernel_tex( const int nWidth, const int nHeight, int *isFreeAll,
+__global__ void main_kernel_tex( const int nWidth, const int nHeight, float hx, int *isFreeAll,
 			     float *concentrationOut ){
   int t_j = blockIdx.x*blockDim.x + threadIdx.x;
   int t_i = blockIdx.y*blockDim.y + threadIdx.y;
@@ -63,15 +63,18 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, int *isFre
   if (t_j == 0)           left_C = tex2D( tex_concentrationIn, nWidth-1, t_i );
   if (t_j == (nWidth-1)) right_C = tex2D( tex_concentrationIn, 0, t_i );
  
-  float newConcentration = 0.25f*( left_C + right_C + down_C + up_C ) +
-         0.25f*( 4 - ( left_isFree + right_isFree + down_isFree + up_isFree ) )*center_C;
-	 
+//   float newConcentration = 0.25f*( left_C + right_C + down_C + up_C ) +
+//          0.25f*( 4 - ( left_isFree + right_isFree + down_isFree + up_isFree ) )*center_C;
+// 
+  float newConcentration = hx*left_C + (1.f - hx)*(right_C + down_C + up_C )/3.f +
+      hx*(1 - right_isFree)*center_C + (1.f-hx)*( 3 - ( left_isFree + down_isFree + up_isFree ) )/3.f*center_C;
+      
   if ( isFreeAll[tid] ) concentrationOut[tid] = newConcentration;
 //     concentrationOut[tid] = left_C/left_nNeighb + right_C/right_nNeighb + down_C/down_nNeighb + up_C/up_nNeighb;
 }
 /////////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////// 
-__global__ void main_kernel_shared( const int nWidth, const int nHeight, int *isFreeAll,
+__global__ void main_kernel_shared( const int nWidth, const int nHeight, float hx, int *isFreeAll,
 			          cudaP *concentrationIn, cudaP *concentrationOut ){
   const int t_j = blockIdx.x*blockDim.x + threadIdx.x;
   const int t_i = blockIdx.y*blockDim.y + threadIdx.y;
@@ -105,10 +108,12 @@ __global__ void main_kernel_shared( const int nWidth, const int nHeight, int *is
   else if ( threadIdx.y == blockDim.y-1 ) concIn_sh[threadIdx.x+1][blockDim.y+1] = concentrationIn[ t_j + (t_i+1)*nWidth ];
   __syncthreads();
   
-  float newConc = 0.25*( concIn_sh[threadIdx.x][threadIdx.y+1] + concIn_sh[threadIdx.x+2][threadIdx.y+1] +
+  cudaP newConc = 0.25*( concIn_sh[threadIdx.x][threadIdx.y+1] + concIn_sh[threadIdx.x+2][threadIdx.y+1] +
                           concIn_sh[threadIdx.x+1][threadIdx.y] + concIn_sh[threadIdx.x+1][threadIdx.y+2] ) +
          0.25*( 4 - ( left_isFree + right_isFree + down_isFree + up_isFree ) )*concIn_sh[threadIdx.x+1][threadIdx.y+1];
-  
+//   float newConcentration = hx*left_C + (1.f - hx)*(right_C + down_C + up_C )/3.f +
+//     hx*(1 - right_isFree)*center_C + (1.f-hx)*( 3 - ( left_isFree + down_isFree + up_isFree ) )/3.f*center_C;
+ 
   if ( isFreeAll[tid] ) concentrationOut[tid] = newConc;
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

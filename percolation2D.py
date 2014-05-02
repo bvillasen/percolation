@@ -17,7 +17,8 @@ from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2D
 from dataAnalysis import plotData
 
 nPoints = 512
-probability = 0.36
+probability = 0.35
+hx = 0.26
 
 cudaP = "float"
 devN = None
@@ -99,15 +100,15 @@ def countFreeNeighbors():
 nIter = 0
 def oneIteration_tex():
   global nIter
-  mainKernel_tex( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationOut_d, 
+  mainKernel_tex( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationOut_d, 
 		 grid=grid2D, block=block2D, texrefs=[tex_isFree, tex_concentrationIn] )
   copy2D_concentrationArray1( aligned=True )
   nIter += 1
 def oneIteration_sh():
   global nIter
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationIn_d, concentrationOut_d,
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationIn_d, concentrationOut_d,
 		grid=grid2D, block=block2D, texrefs=[tex_isFree] )
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), isFree_d, concentrationOut_d, concentrationIn_d,
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationOut_d, concentrationIn_d,
 		grid=grid2D, block=block2D, texrefs=[tex_isFree] )
   #cuda.memcpy_dtod( concentrationIn_d.ptr, concentrationOut_d.ptr, concentrationOut_d.nbytes )
   #concentrationIn_d.gpudata, concentrationOut_d.gpudata = concentrationOut_d.gpudata, concentrationIn_d.gpudata 
