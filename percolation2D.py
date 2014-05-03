@@ -16,8 +16,8 @@ import animation2D
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
 from dataAnalysis import plotData
 
-nPoints = 1024
-probability = 0.
+nPoints = 1024*2
+probability = 0.26
 hx = 0.26
 
 cudaP = "float"
@@ -40,13 +40,13 @@ cudaPre = precision[cudaP]
   
 #set simulation dimentions 
 nWidth = nPoints
-nHeight = nPoints 
+nHeight = nPoints / 4
 
 nCenter = 1
-offsetX = 0
+offsetX = -nWidth/2 + 128
 offsetY = 0
 
-nIterationsPerPlot = 400
+nIterationsPerPlot = 500
 maxVals = []
 sumConc = []
 
@@ -85,8 +85,8 @@ if showKernelMemInfo:
 ########################################################################
 from pycuda.elementwise import ElementwiseKernel
 ########################################################################
-multiplyByScalarReal = ElementwiseKernel(arguments="cudaP a, cudaP *realArray".replace("cudaP", cudaP),
-				operation = "realArray[i] = a*realArray[i] ",
+scalePlotData = ElementwiseKernel(arguments="cudaP a,  cudaP *realArray".replace("cudaP", cudaP),
+				operation = "realArray[i] = log10( 1 + (a*realArray[i] ) ) ",
 				name = "multiplyByScalarReal_kernel")
 ###########################################################################
 #def countFreeNeighbors():
@@ -105,9 +105,9 @@ def oneIteration_tex():
 def oneIteration_sh():
   global nIter
   mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationIn_d, concentrationOut_d,
-		grid=grid2D, block=block2D, texrefs=[tex_isFree] )
+		grid=grid2D, block=block2D )
   mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationOut_d, concentrationIn_d,
-		grid=grid2D, block=block2D, texrefs=[tex_isFree] )
+		grid=grid2D, block=block2D )
   #cuda.memcpy_dtod( concentrationIn_d.ptr, concentrationOut_d.ptr, concentrationOut_d.nbytes )
   #concentrationIn_d.gpudata, concentrationOut_d.gpudata = concentrationOut_d.gpudata, concentrationIn_d.gpudata 
   nIter += 1
@@ -117,7 +117,7 @@ def stepFunction():
   global animIter
   cuda.memcpy_dtod( plotData_d.ptr, concentrationOut_d.ptr, concentrationOut_d.nbytes )
   maxVal = gpuarray.max( plotData_d ).get()
-  multiplyByScalarReal(1./maxVal, plotData_d)
+  scalePlotData(100./maxVal, plotData_d)
   if cudaP == "float": [ oneIteration_tex() for i in range(nIterationsPerPlot) ]
   else: [ oneIteration_sh() for i in range(nIterationsPerPlot//2) ]
   if plotting and animIter%25 == 0: 
@@ -129,10 +129,10 @@ def stepFunction():
 def specialKeyboardFunc( key, x, y ):
   global hx
   if key== animation2D.GLUT_KEY_LEFT:
-    hx -= 0.01
+    hx -= 0.005
   if key== animation2D.GLUT_KEY_RIGHT:
-    hx += 0.01
-  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.1f}     h={3:.2} ".format(nHeight, nWidth, float(probability), float(hx) )
+    hx += 0.005
+  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.1f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
   
 ###########################################################################
 ###########################################################################
@@ -155,12 +155,12 @@ else:
 isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
-activeBlocks_d = gpuarray.to_gpu( np.zeros( [ grid2D[1],grid2D[0] ], dtype=np.uint8) )
-activeThreads_d = gpuarray.to_gpu( np.zeros([nHeight, nWidth], dtype=np.uint8) )
+#activeBlocks_d = gpuarray.to_gpu( np.zeros( [ grid2D[1],grid2D[0] ], dtype=np.uint8) )
+#activeThreads_d = gpuarray.to_gpu( np.zeros([nHeight, nWidth], dtype=np.uint8) )
 #For texture version
-isFree_dArray, copy2D_isFreeArray   = gpuArray2DtocudaArray( isFree_d )
-tex_isFree.set_array( isFree_dArray )
 if cudaP == "float":
+  isFree_dArray, copy2D_isFreeArray   = gpuArray2DtocudaArray( isFree_d )
+  tex_isFree.set_array( isFree_dArray )
   concentration1_dArray, copy2D_concentrationArray1 = gpuArray2DtocudaArray( concentrationOut_d )
   tex_concentrationIn.set_array( concentration1_dArray )
 #For plotting
@@ -177,9 +177,9 @@ if usingAnimation:
   animation2D.plotData_d = plotData_d
   animation2D.background_h = isFree_h
   animation2D.backgroundType = "move"
-  animation2D.maxVar = cudaPre(1.01)
+  animation2D.maxVar = cudaPre(2.0045)
   animation2D.minVar = cudaPre(0.)
-  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.2f}     h={3:.2} ".format(nHeight, nWidth, float(probability), float(hx) )
+  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.2f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
 
 ###########################################################################
 ###########################################################################
