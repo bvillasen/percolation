@@ -78,14 +78,14 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, float hx, 
 
 /////////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////// 
-__global__ void main_kernel_shared( const int nWidth, const int nHeight, cudaP hx, int *isFreeAll,
+__global__ void main_kernel_shared( const int nWidth, const int nHeight, cudaP hx, uchar *isFreeAll,
 			          cudaP *concIn, cudaP *concentrationOut ){
   const int t_j = blockIdx.x*blockDim.x + threadIdx.x;
   const int t_i = blockIdx.y*blockDim.y + threadIdx.y;
   const int tid = t_j + t_i*blockDim.x*gridDim.x;
   
   //Read my neighbors concentration
-  __shared__ int   isFree_sh[ %(B_WIDTH)s + 2 ][ %(B_HEIGHT)s + 2 ];
+  __shared__ uchar   isFree_sh[ %(B_WIDTH)s + 2 ][ %(B_HEIGHT)s + 2 ];
   __shared__ cudaP concIn_sh[ %(B_WIDTH)s + 2 ][ %(B_HEIGHT)s + 2 ];
   concIn_sh[threadIdx.x+1][threadIdx.y+1] =    concIn[tid] ;
   isFree_sh[threadIdx.x+1][threadIdx.y+1] = isFreeAll[tid];
@@ -127,16 +127,16 @@ __global__ void main_kernel_shared( const int nWidth, const int nHeight, cudaP h
   }
   __syncthreads();
   
-  cudaP newConc = 0.25*( concIn_sh[threadIdx.x][threadIdx.y+1] + concIn_sh[threadIdx.x+2][threadIdx.y+1] +
-                          concIn_sh[threadIdx.x+1][threadIdx.y] + concIn_sh[threadIdx.x+1][threadIdx.y+2] )+
-         0.25*( 4 - ( isFree_sh[threadIdx.x][threadIdx.y+1] + isFree_sh[threadIdx.x+2][threadIdx.y+1] + 
-                      isFree_sh[threadIdx.x+1][threadIdx.y] + isFree_sh[threadIdx.x+1][threadIdx.y+2] ) )*concIn_sh[threadIdx.x+1][threadIdx.y+1];
+//   cudaP newConc = 0.25*( concIn_sh[threadIdx.x][threadIdx.y+1] + concIn_sh[threadIdx.x+2][threadIdx.y+1] +
+//                           concIn_sh[threadIdx.x+1][threadIdx.y] + concIn_sh[threadIdx.x+1][threadIdx.y+2] )+
+//          0.25*( 4 - ( isFree_sh[threadIdx.x][threadIdx.y+1] + isFree_sh[threadIdx.x+2][threadIdx.y+1] + 
+//                       isFree_sh[threadIdx.x+1][threadIdx.y] + isFree_sh[threadIdx.x+1][threadIdx.y+2] ) )*concIn_sh[threadIdx.x+1][threadIdx.y+1];
 	 
-	 
-  
-//   cudaP newConc = hx*concIn_sh[threadIdx.x][threadIdx.y+1] + 
-//     (1 - hx)*( concIn_sh[threadIdx.x+2][threadIdx.y+1] + concIn_sh[threadIdx.x+1][threadIdx.y] + concIn_sh[threadIdx.x+1][threadIdx.y+2] )/3 +
-//     ( hx*(1 - right_isFree) + (1 - hx)*( 3 - ( left_isFree + down_isFree + up_isFree ) )/3 )*concIn_sh[threadIdx.x+1][threadIdx.y+1];
+  cudaP oneThird = 1.0/3;
+  cudaP newConc = hx*concIn_sh[threadIdx.x][threadIdx.y+1] + 
+    (1 - hx)*( concIn_sh[threadIdx.x+2][threadIdx.y+1] + concIn_sh[threadIdx.x+1][threadIdx.y] + concIn_sh[threadIdx.x+1][threadIdx.y+2] )*oneThird +
+    ( hx*(1 - isFree_sh[threadIdx.x+2][threadIdx.y+1]) + 
+      (1 - hx)*( 3 - ( isFree_sh[threadIdx.x][threadIdx.y+1] + isFree_sh[threadIdx.x+1][threadIdx.y] + isFree_sh[threadIdx.x+1][threadIdx.y+2] ) )*oneThird )*concIn_sh[threadIdx.x+1][threadIdx.y+1];
 	 
 //   cudaP newConcentration = hx*left_C + (1.f - hx)*(right_C + down_C + up_C )/3.f +
 //     hx*(1 - right_isFree)*center_C + (1.f-hx)*( 3 - ( left_isFree + down_isFree + up_isFree ) )/3.f*center_C;

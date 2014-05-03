@@ -152,7 +152,7 @@ else:
 	    offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = np.uint8(1)
   concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
 		   offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
-isFree_d = gpuarray.to_gpu( isFree_h.astype(np.int32) ) 
+isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
 activeBlocks_d = gpuarray.to_gpu( np.zeros( [ grid2D[1],grid2D[0] ], dtype=np.uint8) )
@@ -196,8 +196,8 @@ if plotting: plt.ion(), plt.show(),
 print "Starting simulation"
 if cudaP == "double": print "Using double precision\n"
 else: print "Using single precision\n"
-print "p = {0:1.2f}\n".format( probability ) 
-
+print "p = {0:1.2f}".format( probability ) 
+print "h = {0:1.2f}\n".format( hx ) 
 
 ##run animation
 if usingAnimation:
