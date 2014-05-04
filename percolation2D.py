@@ -56,7 +56,7 @@ showActivity = False
 if usingAnimation:
   animation2D.nWidth = nWidth
   animation2D.nHeight = nHeight
-  animation2D.windowTitle = "Percolation 2D  points={0}x{1}   p={2:.2f}".format(nHeight, nWidth, float(probability))
+  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.2f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
   animation2D.initGL()
 #initialize pyCUDA context 
 cudaDevice = setCudaDevice( devN=devN, usingAnimation=usingAnimation )
@@ -103,11 +103,11 @@ def oneIteration_sh():
   global nIter
   #cuda.memset_d8(activeBlocks_d.ptr, 0, nBlocks )
   #findActivityKernel( cudaPre(1.e-30), concentrationIn_d, activeBlocks_d, grid=grid2D, block=block2D  )
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationIn_d, concentrationOut_d,
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), cudaPre(1e-20), isFree_d, concentrationIn_d, concentrationOut_d,
 		activeBlocks_d, grid=grid2D, block=block2D )
   #cuda.memset_d8(activeBlocks_d.ptr, 0, nBlocks )
   #findActivityKernel( cudaPre(1.e-30), concentrationOut_d, activeBlocks_d, grid=grid2D, block=block2D  )
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationOut_d, concentrationIn_d,
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), cudaPre(1e-20), isFree_d, concentrationOut_d, concentrationIn_d,
 		activeBlocks_d, grid=grid2D, block=block2D )
   nIter += 1
 ###########################################################################
@@ -145,7 +145,7 @@ def specialKeyboardFunc( key, x, y ):
     hx -= 0.005
   if key== animation2D.GLUT_KEY_RIGHT:
     hx += 0.005
-  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.1f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
+  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.2f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
 ###########################################################################
 ###########################################################################
 #Initialize Data
@@ -192,7 +192,7 @@ if usingAnimation:
   animation2D.backgroundType = "move"
   animation2D.maxVar = cudaPre(2.0045)
   animation2D.minVar = cudaPre(0.)
-  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.2f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
+  #animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.2f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
 ###########################################################################
 ###########################################################################
 if showKernelMemInfo: 
