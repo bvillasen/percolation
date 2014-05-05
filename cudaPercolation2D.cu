@@ -45,7 +45,7 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, float hx, 
 }
 /////////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////// 
-__device__ bool isBlockActive( cudaP minVal, cudaP *sum_sh ){
+__device__ void isBlockActive( cudaP minVal, cudaP *sum_sh, uchar *activeBlock ){
   int tid_b = threadIdx.x + threadIdx.y*blockDim.x;
   
   if ( tid_b < ( (blockDim.x+2)*(blockDim.y+2) - (blockDim.x*blockDim.y) ) ) sum_sh[tid_b] += sum_sh[ tid_b + blockDim.x*blockDim.y ];
@@ -58,9 +58,9 @@ __device__ bool isBlockActive( cudaP minVal, cudaP *sum_sh ){
     i /= 2;
   }
   syncthreads();
-//   if ( tid_b == 0 ) activeBlock[0] = (uchar)1;
+  if ( tid_b == 0 ) activeBlock[0] = ( sum_sh[0] >= minVal );
 //   return false;
-  return ( sum_sh[0] >= minVal );
+//   return ( sum_sh[0] >= minVal );
 }
 /////////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////// 
@@ -133,12 +133,12 @@ __global__ void main_kernel_shared( const int nWidth, const int nHeight, cudaP h
   __syncthreads();
   
   //Check if the block is active
-//   __shared__ uchar activeBlock;
-//   isBlockActive( minVal, concSum_sh, &activeBlock ) ;
-// //   if ( threadIdx.x == 0 and threadIdx.y == 0 ) activeBlock=(uchar)1;
-//   __syncthreads();
-//   if ( activeBlock == 0 ) return;
-  if ( !isBlockActive(minVal, concSum_sh ) ) return;
+  __shared__ uchar activeBlock;
+  isBlockActive( minVal, concSum_sh, &activeBlock ) ;
+//   if ( threadIdx.x == 0 and threadIdx.y == 0 ) activeBlock=(uchar)1;
+  __syncthreads();
+  if ( activeBlock == 0 ) return;
+//   if ( !isBlockActive(minVal, concSum_sh ) ) return;
   
 //   __shared__ uchar activeBlock;
 //   if ( threadIdx.x == 0 and threadIdx.y ==0 ) activeBlock = activeBlocks[blockIdx.x + blockIdx.y*gridDim.x ];

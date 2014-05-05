@@ -16,7 +16,7 @@ import animation2D
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
 from dataAnalysis import plotData
 
-nPoints = 1024*2
+nPoints = 1024
 probability = 0.26
 hx = 0.26
 
