@@ -12,7 +12,6 @@ parentDirectory = currentDirectory[:currentDirectory.rfind("/")]
 toolsDirectory = parentDirectory + "/tools"
 animation2DDirectory = parentDirectory + "/animation2D"
 sys.path.extend( [toolsDirectory, animation2DDirectory] )
-import animation2D
 from tools import printProgressTime, ensureDirectory
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
 from dataAnalysis import plotData, plotCM
@@ -64,6 +63,7 @@ showCM = plottingCM
 
 #Initialize openGL
 if usingAnimation:
+  import animation2D
   animation2D.nWidth = nWidth
   animation2D.nHeight = nHeight
   animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.3f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
@@ -197,7 +197,7 @@ if cudaP == "float":
   concentration1_dArray, copy2D_concentrationArray1 = gpuArray2DtocudaArray( concentrationOut_d )
   tex_concentrationIn.set_array( concentration1_dArray )
 #For animation
-plotData_d = gpuarray.to_gpu( np.zeros_like(concentration_h) )
+if usingAnimation: plotData_d = gpuarray.to_gpu( np.zeros_like(concentration_h) )
 finalFreeMemory = getFreeMemory( show=False )
 print  " Total global memory used: {0:0.0f} MB\n".format( float(initialFreeMemory - finalFreeMemory)/1e6 ) 
 ###########################################################################
