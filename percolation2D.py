@@ -16,7 +16,7 @@ import animation2D
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
 from dataAnalysis import plotData
 
-nPoints = 1024*2
+nPoints = 1024
 probability = 0.26
 hx = 0.26
 
@@ -35,12 +35,13 @@ for option in sys.argv:
   if option.find("anim") >=0: usingAnimation = True
   if option.find("plot") >=0: plotting = True
   if option.find("p=") >=0: probability = float(option[option.find("=")+1:])
+  if option.find("h=") >=0: hx = float(option[option.find("=")+1:])
 precision  = {"float":np.float32, "double":np.float64} 
 cudaPre = precision[cudaP]
   
 #set simulation dimentions 
 nWidth = nPoints
-nHeight = nPoints / 4
+nHeight = nPoints / 2
 
 nCenter = 1
 offsetX = -nWidth/2 + 128
@@ -54,7 +55,7 @@ sumConc = []
 if usingAnimation:
   animation2D.nWidth = nWidth
   animation2D.nHeight = nHeight
-  animation2D.windowTitle = "Percolation 2D  points={0}x{1}   p={2:.2f}".format(nHeight, nWidth, float(probability))
+  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.3f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
   animation2D.initGL()
 #initialize pyCUDA context 
 cudaDevice = setCudaDevice( devN=devN, usingAnimation=usingAnimation )
@@ -73,8 +74,6 @@ cudaCodeString = cudaCodeString_raw  % { "THREADS_PER_BLOCK":block2D[0]*block2D[
 cudaCode = SourceModule(cudaCodeString)
 mainKernel_tex = cudaCode.get_function("main_kernel_tex" )
 mainKernel_sh = cudaCode.get_function("main_kernel_shared" )
-#findActivityKernel = cudaCode.get_function( "findActivity_kernel" )
-#getActivityKernel = cudaCode.get_function( "getActivity_kernel" )
 tex_isFree = cudaCode.get_texref('tex_isFree')
 tex_concentrationIn = cudaCode.get_texref('tex_concentrationIn')
 if showKernelMemInfo: 
@@ -88,12 +87,6 @@ from pycuda.elementwise import ElementwiseKernel
 scalePlotData = ElementwiseKernel(arguments="cudaP a,  cudaP *realArray".replace("cudaP", cudaP),
 				operation = "realArray[i] = log10( 1 + (a*realArray[i] ) ) ",
 				name = "multiplyByScalarReal_kernel")
-###########################################################################
-#def countFreeNeighbors():
-  #tex_isFree.set_array( isFree_dArray )
-  #tex_nNeighb.set_array( nNeighb_dArray )	
-  #countFreeNeighborsKernel( np.int32(nWidth), np.int32(nHeight), nNeighb_d, grid=grid2D, block=block2D )
-  #copy2D_nNeigdbArray( aligned=True )
 ###########################################################################
 nIter = 0
 def oneIteration_tex():
@@ -132,7 +125,7 @@ def specialKeyboardFunc( key, x, y ):
     hx -= 0.005
   if key== animation2D.GLUT_KEY_RIGHT:
     hx += 0.005
-  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.1f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
+  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.3f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
   
 ###########################################################################
 ###########################################################################
@@ -155,8 +148,6 @@ else:
 isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
-#activeBlocks_d = gpuarray.to_gpu( np.zeros( [ grid2D[1],grid2D[0] ], dtype=np.uint8) )
-#activeThreads_d = gpuarray.to_gpu( np.zeros([nHeight, nWidth], dtype=np.uint8) )
 #For texture version
 if cudaP == "float":
   isFree_dArray, copy2D_isFreeArray   = gpuArray2DtocudaArray( isFree_d )
@@ -179,8 +170,6 @@ if usingAnimation:
   animation2D.backgroundType = "move"
   animation2D.maxVar = cudaPre(2.0045)
   animation2D.minVar = cudaPre(0.)
-  animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.2f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
-
 ###########################################################################
 ###########################################################################
 if showKernelMemInfo: 
