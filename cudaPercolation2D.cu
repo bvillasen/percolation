@@ -112,3 +112,18 @@ __global__ void main_kernel_shared( const int nWidth, const int nHeight, cudaP h
     
   if ( isFree_sh[threadIdx.x+1][threadIdx.y+1] )  concentrationOut[tid] = newConc;
 }
+/////////////////////////////////////////////////////////////////////////////////////// 
+/////////////////////////////////////////////////////////////////////////////////////// 
+__global__ void getCM_step1_kernel( const cudaP xMin, const cudaP yMin, const cudaP dx, const cudaP dy, 
+			     cudaP *concAll, cudaP *cm_xAll, cudaP *cm_yAll ){
+  const int t_j = blockIdx.x*blockDim.x + threadIdx.x;
+  const int t_i = blockIdx.y*blockDim.y + threadIdx.y;
+  const int tid = t_j + t_i*blockDim.x*gridDim.x;
+
+  cudaP x = t_j*dx + xMin;
+  cudaP y = t_i*dy + yMin;
+  cudaP conc = concAll[tid];
+  cm_xAll[tid] = x*conc;
+  cm_yAll[tid] = y*conc;
+}
+  

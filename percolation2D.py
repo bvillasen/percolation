@@ -13,18 +13,20 @@ toolsDirectory = parentDirectory + "/tools"
 animation2DDirectory = parentDirectory + "/animation2D"
 sys.path.extend( [toolsDirectory, animation2DDirectory] )
 import animation2D
+from tools import printProgressTime, ensureDirectory
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
-from dataAnalysis import plotData
+from dataAnalysis import plotData, plotCM
 
 nPoints = 1024
 probability = 0.26
 hx = 0.25
 
-cudaP = "float"
+cudaP = "double"
 devN = None
 usingAnimation = False
 showKernelMemInfo = False
-plotting = False
+plottingConc = False
+plottingCM = False
 
 #Read in-line parameters
 for option in sys.argv:
@@ -33,24 +35,32 @@ for option in sys.argv:
   if option == "float": cudaP = "float"
   if option.find("mem") >=0: showKernelMemInfo = True
   if option.find("anim") >=0: usingAnimation = True
-  if option.find("plot") >=0: plotting = True
+  if option.find("plotConc") >=0: plottingConc = True
+  if option.find("plotCM") >=0: plottingCM = True
   if option.find("p=") >=0: probability = float(option[option.find("=")+1:])
   if option.find("h=") >=0: hx = float(option[option.find("=")+1:])
 precision  = {"float":np.float32, "double":np.float64} 
 cudaPre = precision[cudaP]
   
 #set simulation dimentions 
-nWidth = nPoints
+nWidth = nPoints 
 nHeight = nPoints 
+Lx, Ly = 1.,  1.
+dx, dy = Lx/(nWidth-1), Ly/(nHeight-1)
+xMin, yMin = -Lx/2, -Ly/2
 
 nCenter = 1
 offsetX = -nWidth/2 + 128
 offsetY = 0
 
-nIterationsPerPlot = 500
+iterationsPerPlot = 500
 maxVals = []
 sumConc = []
 iterations = []
+iterationsConc = []
+cmX_list = []
+cmY_list = []
+showCM = plottingCM
 
 #Initialize openGL
 if usingAnimation:
@@ -75,6 +85,7 @@ cudaCodeString = cudaCodeString_raw  % { "THREADS_PER_BLOCK":block2D[0]*block2D[
 cudaCode = SourceModule(cudaCodeString)
 mainKernel_tex = cudaCode.get_function("main_kernel_tex" )
 mainKernel_sh = cudaCode.get_function("main_kernel_shared" )
+getCM_step1Kernel = cudaCode.get_function("getCM_step1_kernel")
 tex_isFree = cudaCode.get_texref('tex_isFree')
 tex_concentrationIn = cudaCode.get_texref('tex_concentrationIn')
 if showKernelMemInfo: 
@@ -104,21 +115,48 @@ def oneIteration_sh():
 		grid=grid2D, block=block2D )
   nIter += 1
 ###########################################################################
+def getCM():
+  getCM_step1Kernel( cudaPre(xMin), cudaPre(yMin), cudaPre(dx), cudaPre(dy), 
+		    concentrationIn_d, cmX_d, cmY_d, grid=grid2D, block=block2D )
+  CM = ( gpuarray.sum(cmX_d).get(), gpuarray.sum(cmY_d).get() )
+  return CM
+def saveCM():
+  animation2D.onePoint = getCM()
+  if animIter%5==0:
+    iterations.append( animIter*iterationsPerPlot )
+    cmX_list.append( animation2D.onePoint[0] )
+    cmY_list.append( animation2D.onePoint[1] )
+    if plottingCM: plotCM( cmX_list, cmY_list, iterations, plotY=False, notFirst=True, sqrtX=False )
+def saveConc( maxVal ):
+    maxVals.append( maxVal )
+    sumConc.append( gpuarray.sum(concentrationOut_d).get() )
+    iterationsConc.append( iterationsPerPlot*animIter )
+    plotData( maxVals, sumConc, iterationsConc )
+###########################################################################
+###########################################################################
+#For animation
 animIter = 0
 def stepFunction():
   global animIter
   cuda.memcpy_dtod( plotData_d.ptr, concentrationOut_d.ptr, concentrationOut_d.nbytes )
   maxVal = gpuarray.max( plotData_d ).get()
-  scalePlotData(100./maxVal, plotData_d)
-  if cudaP == "float": [ oneIteration_tex() for i in range(nIterationsPerPlot) ]
-  else: [ oneIteration_sh() for i in range(nIterationsPerPlot//2) ]
-  if plotting and animIter%25 == 0: 
-    maxVals.append( maxVal )
-    sumConc.append( gpuarray.sum(concentrationOut_d).get() )
-    iterations.append( nIterationsPerPlot*animIter )
-    plotData( maxVals, sumConc, iterations )
+  scalePlotData(1e10/maxVal, plotData_d)
+  if showCM: saveCM()
+  if plottingConc and animIter%25 == 0: saveConc( maxVal )
+  if cudaP == "float":  [ oneIteration_tex() for i in range(iterationsPerPlot) ]
+  if cudaP == "double": [ oneIteration_sh() for i in range(iterationsPerPlot//2) ]  
   animIter += 1
   
+def keyboardFunc(*args):
+  global showCM
+  ESCAPE = '\033'
+  if args[0] == ESCAPE:
+    print "Ending Simulation"
+    sys.exit()   
+  if args[0] == "c":
+    showCM = not showCM
+    animation2D.showPoint = not animation2D.showPoint
+
 def specialKeyboardFunc( key, x, y ):
   global hx
   if key== animation2D.GLUT_KEY_LEFT:
@@ -149,13 +187,16 @@ if cudaP == "double": isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) )
 if cudaP == "float": isFree_d = gpuarray.to_gpu( isFree_h.astype(np.int32) ) 
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
+#For CM calculation
+cmX_d = gpuarray.to_gpu( concentration_h )
+cmY_d = gpuarray.to_gpu( concentration_h )
 #For texture version
 if cudaP == "float":
   isFree_dArray, copy2D_isFreeArray   = gpuArray2DtocudaArray( isFree_d )
   tex_isFree.set_array( isFree_dArray )
   concentration1_dArray, copy2D_concentrationArray1 = gpuArray2DtocudaArray( concentrationOut_d )
   tex_concentrationIn.set_array( concentration1_dArray )
-#For plotting
+#For animation
 plotData_d = gpuarray.to_gpu( np.zeros_like(concentration_h) )
 finalFreeMemory = getFreeMemory( show=False )
 print  " Total global memory used: {0:0.0f} MB\n".format( float(initialFreeMemory - finalFreeMemory)/1e6 ) 
@@ -165,11 +206,13 @@ print  " Total global memory used: {0:0.0f} MB\n".format( float(initialFreeMemor
 if usingAnimation:
   animation2D.stepFunc = stepFunction
   animation2D.specialKeys = specialKeyboardFunc
+  animation2D.keyboard = keyboardFunc
   if cudaP == "double": animation2D.usingDouble = True
+  if showCM: animation2D.showPoint = True
   animation2D.plotData_d = plotData_d
   animation2D.background_h = isFree_h
   animation2D.backgroundType = "move"
-  animation2D.maxVar = cudaPre(2.0045)
+  animation2D.maxVar = cudaPre(10.00001)
   animation2D.minVar = cudaPre(0.)
 ###########################################################################
 ###########################################################################
@@ -182,7 +225,7 @@ if showKernelMemInfo:
 ###########################################################################
 ###########################################################################
 #Start Simulation
-if plotting: plt.ion(), plt.show(), 
+if plottingConc or plottingCM: plt.ion(), plt.show(), 
 print "Starting simulation"
 if cudaP == "double": print "Using double precision\n"
 else: print "Using single precision\n"
@@ -192,3 +235,13 @@ print "h = {0:1.2f}\n".format( hx )
 ##run animation
 if usingAnimation:
   animation2D.animate()
+  
+nRuns = 100
+iterationsPerRun = 1000
+start, end = cuda.Event(), cuda.Event()
+start.record()
+for runNumber in range(nRuns):
+  if cudaP == "float":  [ oneIteration_tex() for i in range(iterationsPerRun) ]
+  if cudaP == "double": [ oneIteration_sh()  for i in range(iterationsPerRun//2) ]
+  printProgressTime( runNumber, nRuns, start.time_till(end.record().synchronize())*1e-3 )
+print "\n\nFinished in : {0:.4f}  sec\n".format( float( start.time_till(end.record().synchronize())*1e-3 ) ) 
