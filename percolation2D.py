@@ -18,7 +18,7 @@ from dataAnalysis import plotData
 
 nPoints = 1024
 probability = 0.26
-hx = 0.26
+hx = 0.25
 
 cudaP = "float"
 devN = None
@@ -41,7 +41,7 @@ cudaPre = precision[cudaP]
   
 #set simulation dimentions 
 nWidth = nPoints
-nHeight = nPoints / 2
+nHeight = nPoints 
 
 nCenter = 1
 offsetX = -nWidth/2 + 128
@@ -50,6 +50,7 @@ offsetY = 0
 nIterationsPerPlot = 500
 maxVals = []
 sumConc = []
+iterations = []
 
 #Initialize openGL
 if usingAnimation:
@@ -101,8 +102,6 @@ def oneIteration_sh():
 		grid=grid2D, block=block2D )
   mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationOut_d, concentrationIn_d,
 		grid=grid2D, block=block2D )
-  #cuda.memcpy_dtod( concentrationIn_d.ptr, concentrationOut_d.ptr, concentrationOut_d.nbytes )
-  #concentrationIn_d.gpudata, concentrationOut_d.gpudata = concentrationOut_d.gpudata, concentrationIn_d.gpudata 
   nIter += 1
 ###########################################################################
 animIter = 0
@@ -115,8 +114,9 @@ def stepFunction():
   else: [ oneIteration_sh() for i in range(nIterationsPerPlot//2) ]
   if plotting and animIter%25 == 0: 
     maxVals.append( maxVal )
-    sumConc.append( gpuarray.sum(concentrationIn_d).get() )
-    plotData( maxVals, sumConc )
+    sumConc.append( gpuarray.sum(concentrationOut_d).get() )
+    iterations.append( nIterationsPerPlot*animIter )
+    plotData( maxVals, sumConc, iterations )
   animIter += 1
   
 def specialKeyboardFunc( key, x, y ):
@@ -145,7 +145,8 @@ else:
 	    offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = np.uint8(1)
   concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
 		   offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
-isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
+if cudaP == "double": isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
+if cudaP == "float": isFree_d = gpuarray.to_gpu( isFree_h.astype(np.int32) ) 
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
 #For texture version

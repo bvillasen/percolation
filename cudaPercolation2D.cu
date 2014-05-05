@@ -16,10 +16,10 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, float hx, 
   int tid = t_j + t_i*blockDim.x*gridDim.x;
    
   //Read neighbors occupancy
-  int left_isFree   =  tex2D( tex_isFree, t_j-1, t_i ); ; 
-  int right_isFree  =  tex2D( tex_isFree, t_j+1, t_i ); ; 
-  int up_isFree     =  tex2D( tex_isFree, t_j, t_i+1 ); ; 
-  int down_isFree   =  tex2D( tex_isFree, t_j, t_i-1 ); ; 
+  int left_isFree   = tex2D( tex_isFree, t_j-1, t_i ) ;
+  int right_isFree  = tex2D( tex_isFree, t_j+1, t_i ) ;
+  int up_isFree     = tex2D( tex_isFree, t_j, t_i+1 ) ;
+  int down_isFree   = tex2D( tex_isFree, t_j, t_i-1 ) ;
   //Set PERIODIC boundary conditions
   if (t_i == 0)           down_isFree = isFreeAll[ t_j + (nHeight-1)*nWidth ];
   if (t_i == (nHeight-1))   up_isFree = isFreeAll[ t_j ];
@@ -38,13 +38,14 @@ __global__ void main_kernel_tex( const int nWidth, const int nHeight, float hx, 
   if (t_j == 0)           left_C = tex2D( tex_concentrationIn, nWidth-1, t_i );
   if (t_j == (nWidth-1)) right_C = tex2D( tex_concentrationIn, 0, t_i );
  
-  float newConcentration = 0.25f*( left_C + right_C + down_C + up_C ) +
-         0.25f*( 4 - ( left_isFree + right_isFree + down_isFree + up_isFree ) )*center_C;
-
-//   float newConcentration = hx*left_C + (1.f - hx)*(right_C + down_C + up_C )/3.f +
-//       ( hx*(1 - right_isFree) + (1.f-hx)*( 3 - ( left_isFree + down_isFree + up_isFree ) )/3.f )*center_C;
-//       
-  if ( isFreeAll[tid] )  concentrationOut[tid] = newConcentration;
+//   float newConcentration = 0.25f*( left_C + right_C + down_C + up_C ) +
+//          0.25f*( 4 - ( left_isFree + right_isFree + down_isFree + up_isFree ) )*center_C;
+// 
+  float newConcentration = hx*left_C + (1.f - hx)*(right_C + down_C + up_C )/3.f +
+      hx*(1 - right_isFree)*center_C + (1.f-hx)*( 3 - ( left_isFree + down_isFree + up_isFree ) )/3.f*center_C;
+      
+  if ( isFreeAll[tid] ) concentrationOut[tid] = newConcentration;
+//     concentrationOut[tid] = left_C/left_nNeighb + right_C/right_nNeighb + down_C/down_nNeighb + up_C/up_nNeighb;
 }
 /////////////////////////////////////////////////////////////////////////////////////// 
 /////////////////////////////////////////////////////////////////////////////////////// 
@@ -99,11 +100,12 @@ __global__ void main_kernel_shared( const int nWidth, const int nHeight, cudaP h
   	 
   cudaP oneThird = 1.0/3;
   
+
 //   cudaP newConc = hx*conc_sh[threadIdx.x][threadIdx.y+1] + 
 //     (1 - hx)*( conc_sh[threadIdx.x+2][threadIdx.y+1] + conc_sh[threadIdx.x+1][threadIdx.y] + conc_sh[threadIdx.x+1][threadIdx.y+2] )*oneThird +
-//     ( hx*(1 - isFree_sh[threadIdx.x+2][threadIdx.y+1]) + 
+//      ( hx*(1 - isFree_sh[threadIdx.x+2][threadIdx.y+1]) + 
 //       (1 - hx)*( 3 - ( isFree_sh[threadIdx.x][threadIdx.y+1] + isFree_sh[threadIdx.x+1][threadIdx.y] + isFree_sh[threadIdx.x+1][threadIdx.y+2] ) )*oneThird )*conc_sh[threadIdx.x+1][threadIdx.y+1];
-
+  
   cudaP newConc = hx*( conc_sh[threadIdx.x][threadIdx.y+1] + ( 1 - isFree_sh[threadIdx.x+2][threadIdx.y+1] )*conc_sh[threadIdx.x+1][threadIdx.y+1] ) +
     oneThird*( 1 - hx )*( conc_sh[threadIdx.x+2][threadIdx.y+1] + conc_sh[threadIdx.x+1][threadIdx.y] + conc_sh[threadIdx.x+1][threadIdx.y+2] +
                          conc_sh[threadIdx.x+1][threadIdx.y+1]*( 3 - ( isFree_sh[threadIdx.x][threadIdx.y+1] + isFree_sh[threadIdx.x+1][threadIdx.y] + isFree_sh[threadIdx.x+1][threadIdx.y+2] ) ) );
