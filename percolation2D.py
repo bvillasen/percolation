@@ -4,6 +4,7 @@ import pylab as plt
 import pycuda.driver as cuda
 from pycuda.compiler import SourceModule
 import pycuda.gpuarray as gpuarray
+import h5py as h5
 #import pycuda.curandom as curandom
 
 #Add Modules from other directories
@@ -14,11 +15,11 @@ animation2DDirectory = parentDirectory + "/animation2D"
 sys.path.extend( [toolsDirectory, animation2DDirectory] )
 from tools import printProgressTime, ensureDirectory
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
-from dataAnalysis import plotData, plotCM
+from dataAnalysis import plotConc, plotCM
 
 nPoints = 1024
-probability = 0.26
-hx = 0.25
+probability = 0.38
+hx = 0.5
 
 cudaP = "double"
 devN = None
@@ -29,7 +30,7 @@ plottingCM = False
 
 #Read in-line parameters
 for option in sys.argv:
-  if option.find("device=") != -1: devN = int(option[-1]) 
+  if option.find("dev=") != -1: devN = int(option[-1]) 
   if option == "double": cudaP = "double"
   if option == "float": cudaP = "float"
   if option.find("mem") >=0: showKernelMemInfo = True
@@ -43,7 +44,7 @@ cudaPre = precision[cudaP]
   
 #set simulation dimentions 
 nWidth = nPoints 
-nHeight = nPoints 
+nHeight = nPoints / 2
 Lx, Ly = 1.,  1.
 dx, dy = Lx/(nWidth-1), Ly/(nHeight-1)
 xMin, yMin = -Lx/2, -Ly/2
@@ -100,6 +101,24 @@ scalePlotData = ElementwiseKernel(arguments="cudaP a,  cudaP *realArray".replace
 				operation = "realArray[i] = log10( 1 + (a*realArray[i] ) ) ",
 				name = "multiplyByScalarReal_kernel")
 ###########################################################################
+def startTerrain( p ):
+  global randomVals_h, isFree_h, concentration_h, isFree_h, isFree_d, concentrationIn_d, concentrationOut_d
+  randomVals_h = np.random.random([nHeight, nWidth])
+  isFree_h = ( randomVals_h > p )
+  concentration_h = np.zeros( [nHeight, nWidth], dtype=cudaPre )
+  if nCenter==1:
+    isFree_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1 ] = np.uint8(1)
+    concentration_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1] = 1.
+  else:
+    isFree_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
+	      offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = np.uint8(1)
+    concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
+		    offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
+  if cudaP == "double": isFree_d.set( isFree_h.astype(np.uint8) ) 
+  if cudaP == "float": isFree_d.set( sFree_h.astype(np.int32) )
+  concentrationIn_d.set( concentration_h )
+  concentrationOut_d.set( concentration_h )
+###########################################################################
 nIter = 0
 def oneIteration_tex():
   global nIter
@@ -118,20 +137,20 @@ def oneIteration_sh():
 def getCM():
   getCM_step1Kernel( cudaPre(xMin), cudaPre(yMin), cudaPre(dx), cudaPre(dy), 
 		    concentrationIn_d, cmX_d, cmY_d, grid=grid2D, block=block2D )
-  CM = ( gpuarray.sum(cmX_d).get(), gpuarray.sum(cmY_d).get() )
-  return CM
+  return ( gpuarray.sum(cmX_d).get(), gpuarray.sum(cmY_d).get() )
 def saveCM():
-  animation2D.onePoint = getCM()
-  if animIter%5==0:
-    iterations.append( animIter*iterationsPerPlot )
-    cmX_list.append( animation2D.onePoint[0] )
-    cmY_list.append( animation2D.onePoint[1] )
-    if plottingCM: plotCM( cmX_list, cmY_list, iterations, plotY=False, notFirst=True, sqrtX=False )
+  if usingAnimation:
+    animation2D.onePoint = getCM()
+    if animIter%5==0:
+      iterations.append( animIter*iterationsPerPlot )
+      cmX_list.append( animation2D.onePoint[0] )
+      cmY_list.append( animation2D.onePoint[1] )
+      if plottingCM: plotCM( cmX_list, cmY_list, iterations, probability, hx, plotY=False, notFirst=True, sqrtX=False )
 def saveConc( maxVal ):
     maxVals.append( maxVal )
     sumConc.append( gpuarray.sum(concentrationOut_d).get() )
     iterationsConc.append( iterationsPerPlot*animIter )
-    plotData( maxVals, sumConc, iterationsConc )
+    plotConc( maxVals, sumConc, iterationsConc )
 ###########################################################################
 ###########################################################################
 #For animation
@@ -146,6 +165,7 @@ def stepFunction():
   if cudaP == "float":  [ oneIteration_tex() for i in range(iterationsPerPlot) ]
   if cudaP == "double": [ oneIteration_sh() for i in range(iterationsPerPlot//2) ]  
   animIter += 1
+  #print animIter*iterationsPerPlot 
   
 def keyboardFunc(*args):
   global showCM
@@ -156,7 +176,7 @@ def keyboardFunc(*args):
   if args[0] == "c":
     showCM = not showCM
     animation2D.showPoint = not animation2D.showPoint
-
+  if args[0] == "i": print "Iterations: {0}".format(animIter*iterationsPerPlot)
 def specialKeyboardFunc( key, x, y ):
   global hx
   if key== animation2D.GLUT_KEY_LEFT:
@@ -164,7 +184,6 @@ def specialKeyboardFunc( key, x, y ):
   if key== animation2D.GLUT_KEY_RIGHT:
     hx += 0.005
   animation2D.windowTitle = "Percolation 2D  grid={0}x{1}   p={2:.3f}     h={3:.3} ".format(nHeight, nWidth, float(probability), float(hx) )
-  
 ###########################################################################
 ###########################################################################
 #Initialize Data
@@ -175,18 +194,19 @@ initialFreeMemory = getFreeMemory( show=True )
 randomVals_h = np.random.random([nHeight, nWidth])
 isFree_h = ( randomVals_h > probability )
 concentration_h = np.zeros( [nHeight, nWidth], dtype=cudaPre )
-if nCenter==1:
-  isFree_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1 ] = np.uint8(1)
-  concentration_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1] = 1.
-else:
-  isFree_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
-	    offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = np.uint8(1)
-  concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
-		   offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
-if cudaP == "double": isFree_d = gpuarray.to_gpu( isFree_h.astype(np.uint8) ) 
-if cudaP == "float": isFree_d = gpuarray.to_gpu( isFree_h.astype(np.int32) ) 
+#if nCenter==1:
+  #isFree_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1 ] = np.uint8(1)
+  #concentration_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1] = 1.
+#else:
+  #isFree_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
+	    #offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = np.uint8(1)
+  #concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
+		   #offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
+if cudaP == "double": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , dtype=np.uint8 ) ) 
+if cudaP == "float": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , dtype=np.int32 ) )
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
+startTerrain( probability ) 
 #For CM calculation
 cmX_d = gpuarray.to_gpu( concentration_h )
 cmY_d = gpuarray.to_gpu( concentration_h )
@@ -235,13 +255,38 @@ print "h = {0:1.2f}\n".format( hx )
 ##run animation
 if usingAnimation:
   animation2D.animate()
-  
-nRuns = 100
-iterationsPerRun = 1000
+
+dataDir = currentDirectory + "/data/"
+ensureDirectory( dataDir )
+
+nRealizations = 100
+nRuns = 50
+iterationsPerRun = 2000
+print "nRealizations: {2}\n nRuns: {0}\n  Iterations per Run: {1}\n".format( nRuns, iterationsPerRun, nRealizations ) 
+
+CM_all = []
+#CM_list = []
 start, end = cuda.Event(), cuda.Event()
 start.record()
-for runNumber in range(nRuns):
-  if cudaP == "float":  [ oneIteration_tex() for i in range(iterationsPerRun) ]
-  if cudaP == "double": [ oneIteration_sh()  for i in range(iterationsPerRun//2) ]
-  printProgressTime( runNumber, nRuns, start.time_till(end.record().synchronize())*1e-3 )
+iterations = np.arange(nRuns)*iterationsPerRun
+for iterNumber in range(nRealizations):
+  CM_list = []
+  startTerrain( probability )
+  printProgressTime( iterNumber, nRealizations, start.time_till(end.record().synchronize())*1e-3 )
+  for runNumber in range(nRuns):
+    CM_list.append(getCM())
+    if cudaP == "float":  [ oneIteration_tex() for i in range(iterationsPerRun) ]
+    if cudaP == "double": [ oneIteration_sh()  for i in range(iterationsPerRun//2) ]
+  CM_dataFromRun = np.array(CM_list).T
+  CM_all.append(CM_dataFromRun)
+  
 print "\n\nFinished in : {0:.4f}  sec\n".format( float( start.time_till(end.record().synchronize())*1e-3 ) ) 
+
+#Save data
+CM_data = np.array(CM_all)
+dataFileName = dataDir + "p_{0:.0f}h_{1:.0f}H_{2}W_{3}R_{4}.hdf5".format( float(probability*100), float(hx*100), nHeight, nWidth, nRealizations )
+dataFile = h5.File(dataFileName,'w')
+dataFile.create_dataset( "iterations", data=iterations, compression='lzf')
+dataFile.create_dataset( "CM_data", data=CM_data, compression='lzf')
+dataFile.close()
+print "Data Saved: {0}\n".format( dataFileName )
