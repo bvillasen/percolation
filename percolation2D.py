@@ -166,7 +166,6 @@ def stepFunction():
   if cudaP == "double": [ oneIteration_sh() for i in range(iterationsPerPlot//2) ]  
   animIter += 1
   #print animIter*iterationsPerPlot 
-  
 def keyboardFunc(*args):
   global showCM
   ESCAPE = '\033'
@@ -194,14 +193,6 @@ initialFreeMemory = getFreeMemory( show=True )
 randomVals_h = np.random.random([nHeight, nWidth])
 isFree_h = ( randomVals_h > probability )
 concentration_h = np.zeros( [nHeight, nWidth], dtype=cudaPre )
-#if nCenter==1:
-  #isFree_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1 ] = np.uint8(1)
-  #concentration_h[ offsetY + nHeight/2 - 1, offsetX + nWidth/2 - 1] = 1.
-#else:
-  #isFree_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
-	    #offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  +nCenter/2 ] = np.uint8(1)
-  #concentration_h[ offsetY + nHeight/2 - nCenter/2 : offsetY + nHeight/2 + nCenter/2,
-		   #offsetX + nWidth/2  - nCenter/2 : offsetX + nWidth/2  + nCenter/2 ] = 1./nCenter**2
 if cudaP == "double": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , dtype=np.uint8 ) ) 
 if cudaP == "float": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , dtype=np.int32 ) )
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
@@ -265,7 +256,6 @@ iterationsPerRun = 2000
 print "nRealizations: {2}\n nRuns: {0}\n  Iterations per Run: {1}\n".format( nRuns, iterationsPerRun, nRealizations ) 
 
 CM_all = []
-#CM_list = []
 start, end = cuda.Event(), cuda.Event()
 start.record()
 iterations = np.arange(nRuns)*iterationsPerRun
