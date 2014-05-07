@@ -44,7 +44,7 @@ cudaPre = precision[cudaP]
   
 #set simulation dimentions 
 nWidth = nPoints 
-nHeight = nPoints 
+nHeight = nPoints / 2
 Lx, Ly = 1.,  1.
 dx, dy = Lx/(nWidth-1), Ly/(nHeight-1)
 xMin, yMin = -Lx/2, -Ly/2
@@ -255,11 +255,11 @@ if usingAnimation:
 dataDir = currentDirectory + "/data/"
 ensureDirectory( dataDir )
 
-nRealizations = 100
+nRealizations = 10
 nRuns = 50
 iterationsPerRun = 2000
 print "nRealizations: {2}\n nRuns: {0}\n  Iterations per Run: {1}\n".format( nRuns, iterationsPerRun, nRealizations ) 
-
+boundarySum_all = []
 CM_all = []
 start, end = cuda.Event(), cuda.Event()
 start.record()
@@ -274,14 +274,16 @@ for iterNumber in range(nRealizations):
     if cudaP == "double": [ oneIteration_sh()  for i in range(iterationsPerRun//2) ]
   CM_dataFromRun = np.array(CM_list).T
   CM_all.append(CM_dataFromRun)
-  
+  boundarySum_all.append( gpuarray.sum(blockBoundarySum_d).get() )
 print "\n\nFinished in : {0:.4f}  sec\n".format( float( start.time_till(end.record().synchronize())*1e-3 ) ) 
 
 #Save data
-CM_data = np.array(CM_all)
+CM_data = np.array( CM_all )
+boundary_data = np.array( boundarySum_all ) 
 dataFileName = dataDir + "p_{0:.0f}h_{1:.0f}H_{2}W_{3}R_{4}.hdf5".format( float(probability*100), float(hx*100), nHeight, nWidth, nRealizations )
 dataFile = h5.File(dataFileName,'w')
 dataFile.create_dataset( "iterations", data=iterations, compression='lzf')
 dataFile.create_dataset( "CM_data", data=CM_data, compression='lzf')
+dataFile.create_dataset( "boundary_data", data=boundary_data, compression='lzf')
 dataFile.close()
 print "Data Saved: {0}\n".format( dataFileName )
