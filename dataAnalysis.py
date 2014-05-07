@@ -3,7 +3,7 @@ import sys, time, os, inspect, datetime
 import h5py as h5
 import matplotlib.pyplot as plt
 
-def plotConc( maxVals, sumConc, iterations ):
+def plotConc( maxVals, sumConc, boundatySum, iterations ):
   plt. figure(0)
   plt.clf()
   plt.plot(iterations, sumConc, '--bo' )
@@ -16,6 +16,14 @@ def plotConc( maxVals, sumConc, iterations ):
   plt.yscale("log")
   plt.plot(iterations, maxVals, '--bo')
   plt.title("Concentration Max Value")
+  ax = plt.gca()
+  ax.set_xlabel("Time")
+  
+  plt.figure(2)
+  plt.clf()
+  #plt.yscale("log")
+  plt.plot(iterations, boundatySum, '--bo')
+  plt.title("Boundary Sum")
   ax = plt.gca()
   ax.set_xlabel("Time")
   plt.draw()
@@ -53,8 +61,8 @@ def plotRealizations( dataFileName ):
   #return dataCM
   nRealiz = dataCM.shape[0]
   print " nRealiz: {0}\n".format( nRealiz )
-  plt. figure(0)
-  plt.clf()
+  plt. figure()
+  #plt.clf()
   for i in range( nRealiz ):
     plt.plot(iterations, dataCM[i][0], )
   plt.title("CM_x  p={0:1.2f}  h={1:1.2f}".format(float(p), float(h)))

@@ -44,7 +44,7 @@ cudaPre = precision[cudaP]
   
 #set simulation dimentions 
 nWidth = nPoints 
-nHeight = nPoints / 2
+nHeight = nPoints 
 Lx, Ly = 1.,  1.
 dx, dy = Lx/(nWidth-1), Ly/(nHeight-1)
 xMin, yMin = -Lx/2, -Ly/2
@@ -56,6 +56,7 @@ offsetY = 0
 iterationsPerPlot = 500
 maxVals = []
 sumConc = []
+boundarySum = []
 iterations = []
 iterationsConc = []
 cmX_list = []
@@ -102,7 +103,8 @@ scalePlotData = ElementwiseKernel(arguments="cudaP a,  cudaP *realArray".replace
 				name = "multiplyByScalarReal_kernel")
 ###########################################################################
 def startTerrain( p ):
-  global randomVals_h, isFree_h, concentration_h, isFree_h, isFree_d, concentrationIn_d, concentrationOut_d
+  global randomVals_h, isFree_h, concentration_h, isFree_h, isFree_d
+  global concentrationIn_d, concentrationOut_d, blockBoundarySum_d
   randomVals_h = np.random.random([nHeight, nWidth])
   isFree_h = ( randomVals_h > p )
   concentration_h = np.zeros( [nHeight, nWidth], dtype=cudaPre )
@@ -118,6 +120,7 @@ def startTerrain( p ):
   if cudaP == "float": isFree_d.set( sFree_h.astype(np.int32) )
   concentrationIn_d.set( concentration_h )
   concentrationOut_d.set( concentration_h )
+  blockBoundarySum_d.set( np.zeros( [ grid2D[1], grid2D[0] ], dtype=np.float32))
 ###########################################################################
 nIter = 0
 def oneIteration_tex():
@@ -128,10 +131,10 @@ def oneIteration_tex():
   nIter += 1
 def oneIteration_sh():
   global nIter
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationIn_d, concentrationOut_d,
-		grid=grid2D, block=block2D )
-  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, concentrationOut_d, concentrationIn_d,
-		grid=grid2D, block=block2D )
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, 
+		concentrationIn_d, concentrationOut_d, blockBoundarySum_d, grid=grid2D, block=block2D )
+  mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d,
+		concentrationOut_d, concentrationIn_d, blockBoundarySum_d, grid=grid2D, block=block2D )
   nIter += 1
 ###########################################################################
 def getCM():
@@ -150,7 +153,8 @@ def saveConc( maxVal ):
     maxVals.append( maxVal )
     sumConc.append( gpuarray.sum(concentrationOut_d).get() )
     iterationsConc.append( iterationsPerPlot*animIter )
-    plotConc( maxVals, sumConc, iterationsConc )
+    boundarySum.append( gpuarray.sum(blockBoundarySum_d).get() )
+    plotConc( maxVals, sumConc, boundarySum,  iterationsConc )
 ###########################################################################
 ###########################################################################
 #For animation
@@ -197,6 +201,7 @@ if cudaP == "double": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , 
 if cudaP == "float": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , dtype=np.int32 ) )
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
+blockBoundarySum_d = gpuarray.to_gpu( np.zeros( [ grid2D[1], grid2D[0] ], dtype=np.float32)) 
 startTerrain( probability ) 
 #For CM calculation
 cmX_d = gpuarray.to_gpu( concentration_h )
