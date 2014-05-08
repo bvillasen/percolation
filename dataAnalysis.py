@@ -64,9 +64,7 @@ def plotRealizations( dataFileName, escapedMax=1e-4, removeEscaped=True ):
   nEscaped = sum( boundaryEscaped )
   escapedIndexes = set(boundaryEscaped.nonzero()[0].flat)
   goodIndexes = set((boundaryData < escapedMax).nonzero()[0].flat)
-  print " nRealiz: {0}\n  Boundary escaped: {1}\n".format( nRealiz, nEscaped )
-  #print goodIndexes
-  #print escapedIndexes
+  print " nRealiz: {0}\n  Boundary escaped: {1}, {3}, {2}, ".format( nRealiz, nEscaped, escapedIndexes, boundaryData.max() )
   plt. figure()
   #plt.clf()
   for i in range( nRealiz ):
@@ -77,5 +75,5 @@ def plotRealizations( dataFileName, escapedMax=1e-4, removeEscaped=True ):
   ax.set_xlabel("Time")
   dataFile.close()
   plt.show
-  return dataCM
+  return dataCM, boundaryData
   

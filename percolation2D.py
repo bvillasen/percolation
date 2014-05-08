@@ -245,45 +245,64 @@ if plottingConc or plottingCM: plt.ion(), plt.show(),
 print "Starting simulation"
 if cudaP == "double": print "Using double precision\n"
 else: print "Using single precision\n"
-print "p = {0:1.2f}".format( probability ) 
-print "h = {0:1.2f}\n".format( hx ) 
+
 
 ##run animation
 if usingAnimation:
+  print "p = {0:1.2f}".format( probability ) 
+  print "h = {0:1.2f}\n".format( hx ) 
   animation2D.animate()
 
 dataDir = currentDirectory + "/data/"
 ensureDirectory( dataDir )
 
-nRealizations = 10
+probability_job = [ 0.37, ]
+if devN == 1: probability_job = [ 0.39 ]
+hx_job = [ 0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95 ]
+print "p = {0}".format( probability_job ) 
+print "h = {0}\n".format( hx_job ) 
+
+nRealizations = 100
 nRuns = 50
 iterationsPerRun = 2000
+iterations = np.arange(nRuns)*iterationsPerRun
 print "nRealizations: {2}\n nRuns: {0}\n  Iterations per Run: {1}\n".format( nRuns, iterationsPerRun, nRealizations ) 
-boundarySum_all = []
-CM_all = []
+
+dataFiles = []
+
 start, end = cuda.Event(), cuda.Event()
 start.record()
-iterations = np.arange(nRuns)*iterationsPerRun
-for iterNumber in range(nRealizations):
-  CM_list = []
-  startTerrain( probability )
-  printProgressTime( iterNumber, nRealizations, start.time_till(end.record().synchronize())*1e-3 )
-  for runNumber in range(nRuns):
-    CM_list.append(getCM())
-    if cudaP == "float":  [ oneIteration_tex() for i in range(iterationsPerRun) ]
-    if cudaP == "double": [ oneIteration_sh()  for i in range(iterationsPerRun//2) ]
-  CM_dataFromRun = np.array(CM_list).T
-  CM_all.append(CM_dataFromRun)
-  boundarySum_all.append( gpuarray.sum(blockBoundarySum_d).get() )
+counter = 0
+for probability in probability_job:
+  for hx in hx_job:
+    boundarySum_all = []
+    CM_all = []
+    for iterNumber in range(nRealizations):
+      CM_list = []
+      startTerrain( probability )
+      printProgressTime( counter*nRealizations + iterNumber, len(probability_job)*len(hx_job)*nRealizations, start.time_till(end.record().synchronize())*1e-3 )
+      for runNumber in range(nRuns):
+	CM_list.append(getCM())
+	if cudaP == "float":  [ oneIteration_tex() for i in range(iterationsPerRun) ]
+	if cudaP == "double": [ oneIteration_sh()  for i in range(iterationsPerRun//2) ]
+      CM_dataFromRun = np.array(CM_list).T
+      CM_all.append(CM_dataFromRun)
+      boundarySum_all.append( gpuarray.sum(blockBoundarySum_d).get() )
+    counter += 1
+    #Save data
+    CM_data = np.array( CM_all )
+    boundary_data = np.array( boundarySum_all ) 
+    dataFileName = dataDir + "p_{0:.0f}h_{1:.0f}H_{2}W_{3}R_{4}.hdf5".format( float(probability*100), float(hx*100), nHeight, nWidth, nRealizations )
+    dataFiles.append(dataFileName[dataFileName.find("data/"):])
+    dataFile = h5.File(dataFileName,'w')
+    dataFile.create_dataset( "iterations", data=iterations, compression='lzf')
+    dataFile.create_dataset( "CM_data", data=CM_data, compression='lzf')
+    dataFile.create_dataset( "boundary_data", data=boundary_data, compression='lzf')
+    dataFile.close()
+
 print "\n\nFinished in : {0:.4f}  sec\n".format( float( start.time_till(end.record().synchronize())*1e-3 ) ) 
 
-#Save data
-CM_data = np.array( CM_all )
-boundary_data = np.array( boundarySum_all ) 
-dataFileName = dataDir + "p_{0:.0f}h_{1:.0f}H_{2}W_{3}R_{4}.hdf5".format( float(probability*100), float(hx*100), nHeight, nWidth, nRealizations )
-dataFile = h5.File(dataFileName,'w')
-dataFile.create_dataset( "iterations", data=iterations, compression='lzf')
-dataFile.create_dataset( "CM_data", data=CM_data, compression='lzf')
-dataFile.create_dataset( "boundary_data", data=boundary_data, compression='lzf')
-dataFile.close()
-print "Data Saved: {0}\n".format( dataFileName )
+print "Data Saved:"
+for fileName in dataFiles:
+  print " ", fileName 
+print ""
