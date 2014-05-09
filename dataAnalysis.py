@@ -50,21 +50,29 @@ def plotCM( cmX, cmY, iterations, p, h, plotY=False, notFirst=True, sqrtX=False 
     ax.set_xlabel("Time")
   plt.draw()
   
-  
-def plotRealizations( dataFileName, escapedMax=1e-4, removeEscaped=True ):
+def loadData(dataFileName, escapedMax=1e-4, removeEscaped=True):
   p = float( dataFileName[dataFileName.find("p_")+2:dataFileName.find("h_")] )/100
   h = float( dataFileName[dataFileName.find("h_")+2:dataFileName.find("H_")] )/100
-  print "Loading Data...\n p = {0:1.2}\n h = {1:1.2f}". format( float(p), float(h) )
-  dataFile = h5.File( dataFileName ,'r')
+  print "\nLoading Data: {2}\n p = {0:1.2}\n h = {1:1.2f}". format( float(p), float(h), dataFileName )
+  try: dataFile = h5.File( dataFileName ,'r')
+  except IOError: 
+    print "ERROR:  Unable to open file"
+    return
   iterations = dataFile.get("iterations")[...]
   dataCM = dataFile.get("CM_data")[...]
   boundaryData = dataFile.get("boundary_data")[...]
   nRealiz = dataCM.shape[0]
   boundaryEscaped = boundaryData >= escapedMax
   nEscaped = sum( boundaryEscaped )
-  escapedIndexes = set(boundaryEscaped.nonzero()[0].flat)
-  goodIndexes = set((boundaryData < escapedMax).nonzero()[0].flat)
+  escapedIndexes = list(boundaryEscaped.nonzero()[0].flat)
+  goodIndexes = list((boundaryData < escapedMax).nonzero()[0].flat)
   print " nRealiz: {0}\n  Boundary escaped: {1}, {3}, {2}, ".format( nRealiz, nEscaped, escapedIndexes, boundaryData.max() )
+  return p, h, nRealiz, dataCM, iterations, escapedIndexes, goodIndexes 
+
+  
+def plotRealizations( dataFileName, escapedMax=1e-4, removeEscaped=True ):
+  p, h, nRealiz, dataCM, iterations, escapedIndexes, goodIndexes = loadData( dataFileName, escapedMax, removeEscaped )
+  nEscaped = len( escapedIndexes )
   plt. figure()
   #plt.clf()
   for i in range( nRealiz ):
@@ -73,7 +81,55 @@ def plotRealizations( dataFileName, escapedMax=1e-4, removeEscaped=True ):
   plt.title("CM_x  p={0:1.2f}  h={1:1.2f}  Realiz={2}   removed={3}".format(float(p), float(h), nRealiz, nEscaped*removeEscaped) )
   ax = plt.gca()
   ax.set_xlabel("Time")
-  dataFile.close()
-  plt.show
-  return dataCM, boundaryData
+  plt.show()
+
+
+def analizeRealizations( dataFileName, lLim=0, rLim=49, escapedMax=1e-4, removeEscaped=True ):
+  p, h, nRealiz, dataCM, iterations, escapedIndexes, goodIndexes = loadData( dataFileName, escapedMax, removeEscaped )
+  nEscaped = len( escapedIndexes )
+  if removeEscaped:
+    nGood = len( goodIndexes )
+    startPointsX = dataCM[ goodIndexes, 0, lLim ]
+    endPointsX = dataCM[ goodIndexes, 0, rLim ]
+  else:
+    nGood = nRealiz
+    startPointsX = dataCM[ :, 0, leftLimit ]
+    endPointsX = dataCM[ :, 0, rigthLimit ]
+  deltaX = endPointsX - startPointsX
+  velX = deltaX/(iterations[rLim] - iterations[lLim] )
+  avrgVelX = sum( velX )/nGood
+  stdvVelX = np.sqrt( sum( (velX-avrgVelX)*(velX-avrgVelX) ) )/nGood
+  return [ h, avrgVelX, stdvVelX ]
+
+def getVelXDistribution( p, leftLimit=0, rigthLimit=49 ):
+  lookFor = "p_{0:2.0f}".format( float(p*100) )
+  velX_data =[ analizeRealizations( dataDir + dataFileName, lLim=leftLimit, rLim=rigthLimit ) for dataFileName in allDataFiles if (dataFileName.find( lookFor )>=0) ]
+  velX_data = np.array( velX_data ).T
+  return velX_data
+
+def plotVelXDistribution( p, leftLimit=0, rigthLimit=49 ):
+  velX_data = getVelXDistribution( p, leftLimit, rigthLimit )
+  plt.figure()
+  plt.errorbar( velX_data[0], velX_data[1], yerr=velX_data[2] )
+  plt.show()  
+
+if __name__ == "__main__":
+  #Read al data files in data direcotry
+  dataDir = "data/"
+  allDataFiles = os.listdir( dataDir )
+  allDataFiles.sort()
+  print "Data Files to anlize:"
+  for dataFile in allDataFiles:
+    print " ", dataFile
   
+
+
+
+
+
+
+
+
+
+
+
