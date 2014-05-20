@@ -18,7 +18,7 @@ from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2D
 from dataAnalysis import plotConc, plotCM
 
 nPoints = 512
-probability = 0.38
+probability = 0.35
 hx = 0.5
 
 cudaP = "double"
@@ -43,14 +43,14 @@ precision  = {"float":np.float32, "double":np.float64}
 cudaPre = precision[cudaP]
   
 #set simulation dimentions 
-nWidth = nPoints *3
-nHeight = nPoints *3
+nWidth = nPoints *2
+nHeight = nPoints *2
 #Lx, Ly = 1.,  1.
 dx, dy = 1., 1.
 xMin, yMin = 0., 0.
 
 nCenter = 1
-offsetX = -nWidth/2 + 128*6
+offsetX = -nWidth/2 + 128
 offsetY = 0
 
 iterationsPerPlot = 500
