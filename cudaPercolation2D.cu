@@ -56,12 +56,13 @@ __global__ void main_kernel_shared( const int nWidth, const int nHeight, cudaP h
   const int tid = t_j + t_i*blockDim.x*gridDim.x;
   __shared__ float boundarySum;
   if (threadIdx.x == 0 and threadIdx.y == 0) boundarySum = blockBoundarySum[blockIdx.x + blockIdx.y*gridDim.x];
-  __syncthreads();
   //Read my neighbors concentration
   __shared__ uchar   isFree_sh[ %(B_WIDTH)s + 2 ][ %(B_HEIGHT)s + 2 ];
   __shared__ cudaP conc_sh[ %(B_WIDTH)s + 2 ][ %(B_HEIGHT)s + 2 ];
   conc_sh[threadIdx.x+1][threadIdx.y+1] =    concIn[tid] ;
   isFree_sh[threadIdx.x+1][threadIdx.y+1] = isFreeAll[tid];
+  __syncthreads();
+  
   //Left boundary
   if (t_j == 0){
     conc_sh[0][threadIdx.y+1]   =    concIn[ (nWidth-1) + t_i*nWidth ];

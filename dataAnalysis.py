@@ -53,7 +53,8 @@ def plotCM( cmX, cmY, iterations, p, h, plotY=False, notFirst=True, sqrtX=False 
 def loadData(dataFileName, escapedMax=1e-4, removeEscaped=True):
   p = float( dataFileName[dataFileName.find("p_")+2:dataFileName.find("h_")] )/100
   h = float( dataFileName[dataFileName.find("h_")+2:dataFileName.find("H_")] )/100
-  print "\nLoading Data: {2}\n p = {0:1.2}\n h = {1:1.2f}". format( float(p), float(h), dataFileName )
+  H = int( dataFileName[dataFileName.find("H_")+2:dataFileName.find("W_")] )
+  W = int( dataFileName[dataFileName.find("W_")+2:dataFileName.find("R_")] )
   try: dataFile = h5.File( dataFileName ,'r')
   except IOError: 
     print "ERROR:  Unable to open file"
@@ -66,16 +67,19 @@ def loadData(dataFileName, escapedMax=1e-4, removeEscaped=True):
   nEscaped = sum( boundaryEscaped )
   escapedIndexes = list(boundaryEscaped.nonzero()[0].flat)
   goodIndexes = list((boundaryData < escapedMax).nonzero()[0].flat)
-  print " nRealiz: {0}\n  Boundary escaped: {1}, {3}, {2}, ".format( nRealiz, nEscaped, escapedIndexes, boundaryData.max() )
+  if len(escapedIndexes)>0:
+    #print "\nLoading Data: {2}\np = {0:1.2}   h = {1:1.2f}  nRealiz: {3} ". format( float(p), float(h), dataFileName, nRealiz )
+    print "ESC: p={0:1.2f}   h={1:1.2f}   Boundary escaped: ( {2}, {3:1.4f} ) grid: ( {4} x {5} )".format( float(p), float(h), nEscaped, float(boundaryData.max()), H, W )
   return p, h, nRealiz, dataCM, iterations, escapedIndexes, goodIndexes 
 
   
-def plotRealizations( dataFileName, escapedMax=1e-4, removeEscaped=True ):
+def plotRealizations( dataFileName, escapedMax=1e-4, removeEscaped=True, nCurves=None ):
   p, h, nRealiz, dataCM, iterations, escapedIndexes, goodIndexes = loadData( dataFileName, escapedMax, removeEscaped )
   nEscaped = len( escapedIndexes )
+  if not nCurves: nCurves=nRealiz
   plt. figure()
   #plt.clf()
-  for i in range( nRealiz ):
+  for i in range( nCurves ):
     if i in goodIndexes: plt.plot(iterations, dataCM[i][0], ) 
     if i in escapedIndexes: plt.plot(iterations, dataCM[i][0], '--r' )    
   plt.title("CM_x  p={0:1.2f}  h={1:1.2f}  Realiz={2}   removed={3}".format(float(p), float(h), nRealiz, nEscaped*removeEscaped) )
@@ -101,26 +105,43 @@ def analizeRealizations( dataFileName, lLim=0, rLim=49, escapedMax=1e-4, removeE
   stdvVelX = np.sqrt( sum( (velX-avrgVelX)*(velX-avrgVelX) ) )/nGood
   return [ h, avrgVelX, stdvVelX ]
 
-def getVelXDistribution( p, leftLimit=0, rigthLimit=49 ):
-  lookFor = "p_{0:2.0f}".format( float(p*100) )
-  velX_data =[ analizeRealizations( dataDir + dataFileName, lLim=leftLimit, rLim=rigthLimit ) for dataFileName in allDataFiles if (dataFileName.find( lookFor )>=0) ]
+def getVelXDistribution( p, leftLimit=0, rigthLimit=49, escapedMax=1e-4 ):
+  lookForP = "p_{0:2.0f}".format( float(p*100) )
+  lookForW = "W_{0}".format( 1024 )
+  velX_data =[ analizeRealizations( dataDir + dataFileName, lLim=leftLimit, rLim=rigthLimit, escapedMax=escapedMax ) for dataFileName in allDataFiles if (dataFileName.find( lookForP )>=0) ]# and (dataFileName.find(lookForW)>=0)  ]
   velX_data = np.array( velX_data ).T
   return velX_data
 
-def plotVelXDistribution( p, leftLimit=0, rigthLimit=49 ):
-  velX_data = getVelXDistribution( p, leftLimit, rigthLimit )
+def plotVelXDistribution( p, leftLimit=0, rigthLimit=49, escapedMax=1e-4 ):
+  velX_data = getVelXDistribution( p, leftLimit, rigthLimit, escapedMax )
   plt.figure()
-  plt.errorbar( velX_data[0], velX_data[1], yerr=velX_data[2] )
+  plt.errorbar( velX_data[0], velX_data[1], yerr=velX_data[2], )
   plt.show()  
+  
+def plotVelX( p_list, leftLimit=0, rigthLimit=49, escapedMax=1e-4):
+  plt.figure()
+  for p in p_list:
+    velX_data = getVelXDistribution( p, leftLimit, rigthLimit, escapedMax )
+    plt.errorbar( velX_data[0], velX_data[1], yerr=velX_data[2], label="p={0:1.2f}".format(float(p)) )
+  ax = plt.gca()
+  ax.set_xlabel("$h$")
+  ax.set_ylabel("$v_x$")
+  plt.legend(prop={'size':8})
+  plt.show()  
+  
+
+
+dataDir = "data/"
+allDataFiles = os.listdir( dataDir )
+allDataFiles.sort()
 
 if __name__ == "__main__":
   #Read al data files in data direcotry
-  dataDir = "data/"
-  allDataFiles = os.listdir( dataDir )
-  allDataFiles.sort()
-  print "Data Files to anlize:"
-  for dataFile in allDataFiles:
-    print " ", dataFile
+  #print "Data Files to anlize:"
+  #for dataFile in allDataFiles:
+    #print " ", dataFile
+
+  plotVelXDistribution( 0.39, leftLimit=0, rigthLimit=49, escapedMax=1e-4  )
   
 
 

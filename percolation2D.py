@@ -17,7 +17,7 @@ from tools import printProgressTime, ensureDirectory
 from cudaTools import setCudaDevice, getFreeMemory, kernelMemoryInfo, gpuArray2DtocudaArray
 from dataAnalysis import plotConc, plotCM
 
-nPoints = 1024
+nPoints = 512
 probability = 0.38
 hx = 0.5
 
@@ -43,14 +43,14 @@ precision  = {"float":np.float32, "double":np.float64}
 cudaPre = precision[cudaP]
   
 #set simulation dimentions 
-nWidth = nPoints 
-nHeight = nPoints / 2
-Lx, Ly = 1.,  1.
-dx, dy = Lx/(nWidth-1), Ly/(nHeight-1)
-xMin, yMin = -Lx/2, -Ly/2
+nWidth = nPoints *3
+nHeight = nPoints *3
+#Lx, Ly = 1.,  1.
+dx, dy = 1., 1.
+xMin, yMin = 0., 0.
 
 nCenter = 1
-offsetX = -nWidth/2 + 128
+offsetX = -nWidth/2 + 128*6
 offsetY = 0
 
 iterationsPerPlot = 500
@@ -243,8 +243,9 @@ if showKernelMemInfo:
 #Start Simulation
 if plottingConc or plottingCM: plt.ion(), plt.show(), 
 print "Starting simulation"
-if cudaP == "double": print "Using double precision\n"
-else: print "Using single precision\n"
+if cudaP == "double": print "Using double precision"
+else: print "Using single precision"
+print "Grid: {0} x {1}\n".format(nHeight, nWidth)
 
 
 ##run animation
@@ -256,18 +257,26 @@ if usingAnimation:
 dataDir = currentDirectory + "/data/"
 ensureDirectory( dataDir )
 
-probability_job = [ 0.39 ]
-#if devN == 1: probability_job = [ 0.39 ]
-hx_job = [ 0.3, 0.32, 0.34, 0.36, 0.38, 0.42, 0.44, 0.46, 0.48, 0.52, 0.54, 0.56, 0.58, 0.62, 0.64, 0.66, 0.68, 0.72 ] 
-if devN == 1: hx_job = [ 0.31, 0.33, 0.35, 0.37, 0.39, 0.41, 0.43, 0.47, 0.49, 0.51, 0.53, 0.57, 0.59, 0.61, 0.63, 0.67, 0.69 ]
+probability_job = [ 0.20, 0.28 ]
+if devN == 1: hx_job = [ 0.25 ]
+#hx_job = [ 0.25, 0.26, 0.27, 0.28, 0.29 ]
+#hx_job = [  0.28, 0.29 ]
+#hx_job = [  0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39, 0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 0.99 ]
+#hx_job = [  0.52, 0.54, 0.56, 0.58, 0.60, 0.63, 0.66, 0.69, 0.72 ] 
+#hx_job = [ 0.40, 0.41, 0.42, 0.43, 0.44, 0.45 ]
+#hx_job = [ 0.46, 0.48, 0.50 ]
+#hx_job = [ 0.47, 0.50, 0.55, 0.60, 0.65, 0.70 ]
+#hx_job = [ 0.75, 0.80, 0.85, 0.9, 0.95, 0.99 ]
+#hx_job = [ 0.50, 0.39, 0.41, 0.43, 0.45, 0.47, 0.49, 0.52, 0.54 ] 
+#hx_job = [  0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95 ]
 print "p = {0}".format( probability_job ) 
 print "h = {0}\n".format( hx_job ) 
 
 nRealizations = 100
 nRuns = 50
-iterationsPerRun = 2000
+iterationsPerRun = 400
 iterations = np.arange(nRuns)*iterationsPerRun
-print "nRealizations: {2}\n nRuns: {0}\n  Iterations per Run: {1}\n".format( nRuns, iterationsPerRun, nRealizations ) 
+print "nRealizations: {2}\n nRuns: {0}\n  Iterations per Run: {1}\n Time: {3}\n".format( nRuns, iterationsPerRun, nRealizations, nRuns*iterationsPerRun ) 
 
 dataFiles = []
 
@@ -304,6 +313,6 @@ for probability in probability_job:
 print "\n\nFinished in : {0:.4f}  sec\n".format( float( start.time_till(end.record().synchronize())*1e-3 ) ) 
 
 print "Data Saved:"
-for fileName in dataFiles[1:]:
+for fileName in dataFiles:
   print " ", fileName 
 print ""
