@@ -104,7 +104,7 @@ scalePlotData = ElementwiseKernel(arguments="cudaP a,  cudaP *realArray".replace
 ###########################################################################
 def startTerrain( p ):
   global randomVals_h, isFree_h, concentration_h, isFree_h, isFree_d
-  global concentrationIn_d, concentrationOut_d, blockBoundarySum_d
+  global concentrationIn_d, concentrationOut_d
   randomVals_h = np.random.random([nHeight, nWidth])
   isFree_h = ( randomVals_h > p )
   concentration_h = np.zeros( [nHeight, nWidth], dtype=cudaPre )
@@ -120,7 +120,7 @@ def startTerrain( p ):
   if cudaP == "float": isFree_d.set( sFree_h.astype(np.int32) )
   concentrationIn_d.set( concentration_h )
   concentrationOut_d.set( concentration_h )
-  blockBoundarySum_d.set( np.zeros( [ grid2D[1], grid2D[0] ], dtype=np.float32))
+  #blockBoundarySum_d.set( np.zeros( [ grid2D[1], grid2D[0] ], dtype=np.float32))
 ###########################################################################
 nIter = 0
 def oneIteration_tex():
@@ -132,9 +132,9 @@ def oneIteration_tex():
 def oneIteration_sh():
   global nIter
   mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d, 
-		concentrationIn_d, concentrationOut_d, blockBoundarySum_d, grid=grid2D, block=block2D )
+		concentrationIn_d, concentrationOut_d, grid=grid2D, block=block2D )
   mainKernel_sh( np.int32(nWidth), np.int32(nHeight), cudaPre(hx), isFree_d,
-		concentrationOut_d, concentrationIn_d, blockBoundarySum_d, grid=grid2D, block=block2D )
+		concentrationOut_d, concentrationIn_d, grid=grid2D, block=block2D )
   nIter += 1
 ###########################################################################
 def getCM():
@@ -153,7 +153,7 @@ def saveConc( maxVal ):
     maxVals.append( maxVal )
     sumConc.append( gpuarray.sum(concentrationOut_d).get() )
     iterationsConc.append( iterationsPerPlot*animIter )
-    boundarySum.append( gpuarray.sum(blockBoundarySum_d).get() )
+    #boundarySum.append( gpuarray.sum(blockBoundarySum_d).get() )
     plotConc( maxVals, sumConc, boundarySum,  iterationsConc )
 ###########################################################################
 ###########################################################################
@@ -201,7 +201,7 @@ if cudaP == "double": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , 
 if cudaP == "float": isFree_d = gpuarray.to_gpu( np.zeros( [nHeight, nWidth] , dtype=np.int32 ) )
 concentrationIn_d = gpuarray.to_gpu( concentration_h )
 concentrationOut_d = gpuarray.to_gpu( concentration_h )
-blockBoundarySum_d = gpuarray.to_gpu( np.zeros( [ grid2D[1], grid2D[0] ], dtype=np.float32)) 
+#blockBoundarySum_d = gpuarray.to_gpu( np.zeros( [ grid2D[1], grid2D[0] ], dtype=np.float32)) 
 startTerrain( probability ) 
 #For CM calculation
 cmX_d = gpuarray.to_gpu( concentration_h )
@@ -257,8 +257,8 @@ if usingAnimation:
 dataDir = currentDirectory + "/data/"
 ensureDirectory( dataDir )
 
-probability_job = [ 0.20, 0.28 ]
-if devN == 1: hx_job = [ 0.25 ]
+probability_job = [ 0.35 ]
+hx_job = [ 0.30 ]
 #hx_job = [ 0.25, 0.26, 0.27, 0.28, 0.29 ]
 #hx_job = [  0.28, 0.29 ]
 #hx_job = [  0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39, 0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 0.99 ]
@@ -274,7 +274,7 @@ print "h = {0}\n".format( hx_job )
 
 nRealizations = 100
 nRuns = 50
-iterationsPerRun = 400
+iterationsPerRun = 2000
 iterations = np.arange(nRuns)*iterationsPerRun
 print "nRealizations: {2}\n nRuns: {0}\n  Iterations per Run: {1}\n Time: {3}\n".format( nRuns, iterationsPerRun, nRealizations, nRuns*iterationsPerRun ) 
 
@@ -297,7 +297,7 @@ for probability in probability_job:
 	if cudaP == "double": [ oneIteration_sh()  for i in range(iterationsPerRun//2) ]
       CM_dataFromRun = np.array(CM_list).T
       CM_all.append(CM_dataFromRun)
-      boundarySum_all.append( gpuarray.sum(blockBoundarySum_d).get() )
+      boundarySum_all.append( 1. - gpuarray.sum( concentrationOut_d ).get() )
     counter += 1
     #Save data
     CM_data = np.array( CM_all )

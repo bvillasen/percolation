@@ -18,19 +18,9 @@ def plotConc( maxVals, sumConc, boundatySum, iterations ):
   plt.title("Concentration Max Value")
   ax = plt.gca()
   ax.set_xlabel("Time")
-  
-  plt.figure(2)
-  plt.clf()
-  #plt.yscale("log")
-  plt.plot(iterations, boundatySum, '--bo')
-  plt.title("Boundary Sum")
-  ax = plt.gca()
-  ax.set_xlabel("Time")
   plt.draw()
   
 def plotCM( cmX, cmY, iterations, p, h, plotY=False, notFirst=True, sqrtX=False  ):
-  #wm = plt.get_current_fig_manager()
-  #wm.window.wm_geometry("400x900+50+50")
   plt. figure(0)
   plt.clf()
   if sqrtX:
@@ -101,9 +91,11 @@ def analizeRealizations( dataFileName, lLim=0, rLim=49, escapedMax=1e-4, removeE
     endPointsX = dataCM[ :, 0, rigthLimit ]
   deltaX = endPointsX - startPointsX
   velX = deltaX/(iterations[rLim] - iterations[lLim] )
-  avrgVelX = sum( velX )/nGood
+  #avrgVelX = sum( velX )/nGood
+  avrgVelX = np.mean( velX )
   stdvVelX = np.sqrt( sum( (velX-avrgVelX)*(velX-avrgVelX) ) )/nGood
-  return [ h, avrgVelX, stdvVelX ]
+  varVelX  = np.var( velX )
+  return [ h, avrgVelX, stdvVelX, varVelX ]
 
 def getVelXDistribution( p, leftLimit=0, rigthLimit=49, escapedMax=1e-4 ):
   lookForP = "p_{0:2.0f}".format( float(p*100) )
@@ -115,7 +107,11 @@ def getVelXDistribution( p, leftLimit=0, rigthLimit=49, escapedMax=1e-4 ):
 def plotVelXDistribution( p, leftLimit=0, rigthLimit=49, escapedMax=1e-4 ):
   velX_data = getVelXDistribution( p, leftLimit, rigthLimit, escapedMax )
   plt.figure()
-  plt.errorbar( velX_data[0], velX_data[1], yerr=velX_data[2], )
+  fig, ax = plt.subplots(2, sharex=True)
+  ax[0].errorbar( velX_data[0], velX_data[1], yerr=velX_data[2], )
+  #ax[0].axhline(0, xmin=0, xmax=1, 'g')
+  ax[1].plot(  velX_data[0], velX_data[3] )
+  ax[0].set_xlim(0.25, 1.)
   plt.show()  
   
 def plotVelX( p_list, leftLimit=0, rigthLimit=49, escapedMax=1e-4):
